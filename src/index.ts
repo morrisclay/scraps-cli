@@ -16,7 +16,7 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.1.3")
+  .version("0.1.4")
   .addHelpText("after", `
 Getting Started:
   scraps signup                              # Create an account
