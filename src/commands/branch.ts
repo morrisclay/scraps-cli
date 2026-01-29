@@ -20,9 +20,10 @@ export function registerBranchCommands(program: Command): void {
       const client = requireAuth();
       const { store, repo } = parseRepoRef(ref);
       try {
-        const branches = await client.get(
+        const result = await client.get(
           `/api/v1/stores/${store}/repos/${repo}/branches`
         );
+        const branches = result.branches || result;
         output(branches, {
           headers: ["Name", "SHA"],
           rows: branches.map((b: any) => [
@@ -46,7 +47,7 @@ export function registerBranchCommands(program: Command): void {
       try {
         await client.post(`/api/v1/stores/${store}/repos/${repo}/branches`, {
           name,
-          from: opts.from,
+          source: opts.from,
         });
         success(`Branch '${name}' created from '${opts.from}'`);
       } catch (e: any) {
@@ -63,7 +64,7 @@ export function registerBranchCommands(program: Command): void {
       const { store, repo } = parseRepoRef(ref);
       try {
         await client.delete(
-          `/api/v1/stores/${store}/repos/${repo}/branches/${name}`
+          `/api/v1/stores/${store}/repos/${repo}/branches/${encodeURIComponent(name)}`
         );
         success(`Branch '${name}' deleted`);
       } catch (e: any) {

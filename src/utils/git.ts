@@ -50,12 +50,12 @@ export function getRemoteUrl(remote: string = "origin", dir: string = "."): stri
 export function parseRepoUrl(url: string): { host: string; store: string; repo: string } | null {
   // Match patterns like:
   // https://x:key@host/stores/slug/repos/name
-  // https://host/stores/slug/repos/name
+  // http://host/stores/slug/repos/name
   const match = url.match(
-    /https?:\/\/(?:[^@]+@)?([^/]+)\/stores\/([^/]+)\/repos\/([^/.]+)/
+    /(https?):\/\/(?:[^@]+@)?([^/]+)\/stores\/([^/]+)\/repos\/([^/.]+)/
   );
   if (!match) return null;
-  return { host: `https://${match[1]}`, store: match[2], repo: match[3] };
+  return { host: `${match[1]}://${match[2]}`, store: match[3], repo: match[4] };
 }
 
 export function buildAuthUrl(host: string, apiKey: string, store: string, repo: string): string {

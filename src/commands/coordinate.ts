@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { requireAuth } from "../api.js";
 import { success, error, info, output, color, formatDateTime } from "../utils/output.js";
 import { buildWsUrl, connectWebSocket } from "../utils/websocket.js";
+import { randomUUID } from "crypto";
 
 function parseRepoRef(ref: string): { store: string; repo: string; branch?: string } {
   // Format: store/repo or store/repo:branch
@@ -41,35 +42,45 @@ export function registerCoordinateCommands(program: Command): void {
 
       try {
         const status = await client.get(
-          `/api/v1/stores/${store}/repos/${repo}/branches/${branch}/coordinate`
+          `/stores/${store}/repos/${repo}/branches/${encodeURIComponent(branch)}/coordinate/state`
         );
 
         console.log(color(`Coordination status for ${store}/${repo}:${branch}`, "bold"));
         console.log();
 
-        if (status.claims && status.claims.length > 0) {
+        if (status.intents && status.intents.length > 0) {
           console.log(color("Active Claims:", "cyan"));
-          for (const claim of status.claims) {
+          for (const intent of status.intents) {
             console.log(
-              `  ${color(claim.agent_id?.slice(0, 8) || "unknown", "yellow")} - ${claim.patterns?.join(", ") || "(no patterns)"}`
+              `  ${color(intent.agent_id?.slice(0, 8) || "unknown", "yellow")} - ${intent.patterns?.join(", ") || "(no patterns)"}`
             );
-            if (claim.message) {
-              console.log(color(`    "${claim.message}"`, "dim"));
+            if (intent.claim) {
+              console.log(color(`    "${intent.claim}"`, "dim"));
             }
-            if (claim.timestamp) {
-              console.log(color(`    Claimed: ${formatDateTime(claim.timestamp)}`, "dim"));
+            if (intent.created_at) {
+              console.log(color(`    Claimed: ${formatDateTime(new Date(intent.created_at))}`, "dim"));
             }
           }
         } else {
           console.log(color("No active claims", "dim"));
         }
 
+        if (status.presence && status.presence.length > 0) {
+          console.log();
+          console.log(color("Active Agents:", "cyan"));
+          for (const p of status.presence) {
+            console.log(
+              `  ${color(p.agent_name || p.agent_id?.slice(0, 8) || "unknown", "yellow")} - watching: ${p.active_paths?.join(", ") || "(none)"}`
+            );
+          }
+        }
+
         if (status.activity && status.activity.length > 0) {
           console.log();
           console.log(color("Recent Activity:", "cyan"));
-          for (const act of status.activity.slice(0, 5)) {
+          for (const act of status.activity.slice(-5)) {
             console.log(
-              `  ${formatDateTime(act.timestamp)} - ${act.type}: ${act.summary || act.message || ""}`
+              `  ${formatDateTime(new Date(act.timestamp))} - ${act.type}: ${act.claim || act.patterns?.join(", ") || ""}`
             );
           }
         }
@@ -82,7 +93,9 @@ export function registerCoordinateCommands(program: Command): void {
   coordinate
     .command("claim <store/repo:branch> <patterns...>")
     .description("Claim file patterns for editing")
-    .option("-m, --message <message>", "Description of planned changes")
+    .option("-m, --message <message>", "Description of planned changes", "CLI claim")
+    .option("--agent-id <id>", "Agent ID (auto-generated if not provided)")
+    .option("--ttl <seconds>", "Claim TTL in seconds", "300")
     .action(async (ref, patterns, opts) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);
@@ -92,15 +105,32 @@ export function registerCoordinateCommands(program: Command): void {
         process.exit(1);
       }
 
+      const agentId = opts.agentId || `cli-${randomUUID().slice(0, 8)}`;
+
       try {
-        await client.post(
-          `/api/v1/stores/${store}/repos/${repo}/branches/${branch}/coordinate/claim`,
+        const result = await client.post(
+          `/stores/${store}/repos/${repo}/branches/${encodeURIComponent(branch)}/coordinate/claim`,
           {
+            agent_id: agentId,
             patterns,
-            message: opts.message,
+            claim: opts.message,
+            ttl_seconds: parseInt(opts.ttl),
           }
         );
+
+        if (result.type === "claim_conflict") {
+          error("Claim conflict detected:");
+          for (const c of result.conflicts || []) {
+            console.log(`  ${color(c.agent_name || c.agent_id?.slice(0, 8), "yellow")}: ${c.patterns?.join(", ")} - "${c.claim}"`);
+          }
+          process.exit(1);
+        }
+
         success(`Claimed patterns: ${patterns.join(", ")}`);
+        info(`Agent ID: ${agentId}`);
+        if (result.expires_at) {
+          info(`Expires: ${formatDateTime(new Date(result.expires_at))}`);
+        }
       } catch (e: any) {
         error(`Failed to claim: ${e.message}`);
         process.exit(1);
@@ -108,9 +138,9 @@ export function registerCoordinateCommands(program: Command): void {
     });
 
   coordinate
-    .command("release <store/repo:branch> [patterns...]")
+    .command("release <store/repo:branch> <patterns...>")
     .description("Release claimed file patterns")
-    .option("--all", "Release all claims")
+    .requiredOption("--agent-id <id>", "Agent ID that owns the claims")
     .action(async (ref, patterns, opts) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);
@@ -120,20 +150,15 @@ export function registerCoordinateCommands(program: Command): void {
         process.exit(1);
       }
 
-      if (!opts.all && (!patterns || patterns.length === 0)) {
-        error("Specify patterns to release or use --all");
-        process.exit(1);
-      }
-
       try {
-        await client.post(
-          `/api/v1/stores/${store}/repos/${repo}/branches/${branch}/coordinate/release`,
+        await client.delete(
+          `/stores/${store}/repos/${repo}/branches/${encodeURIComponent(branch)}/coordinate/claim`,
           {
-            patterns: opts.all ? undefined : patterns,
-            all: opts.all,
+            agent_id: opts.agentId,
+            patterns,
           }
         );
-        success(opts.all ? "All claims released" : `Released patterns: ${patterns.join(", ")}`);
+        success(`Released patterns: ${patterns.join(", ")}`);
       } catch (e: any) {
         error(`Failed to release: ${e.message}`);
         process.exit(1);
@@ -143,8 +168,7 @@ export function registerCoordinateCommands(program: Command): void {
   coordinate
     .command("watch <store/repo:branch>")
     .description("Watch coordination activity in real-time")
-    .option("--last-event <id>", "Resume from event ID")
-    .action(async (ref, opts) => {
+    .action(async (ref) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);
 
@@ -153,16 +177,9 @@ export function registerCoordinateCommands(program: Command): void {
         process.exit(1);
       }
 
-      const wsUrl = buildWsUrl(
-        client.getHost(),
-        store,
-        repo,
-        client.getApiKey(),
-        {
-          branch,
-          lastEventId: opts.lastEvent ? parseInt(opts.lastEvent) : undefined,
-        }
-      );
+      // Build WebSocket URL for tail endpoint
+      const wsHost = client.getHost().replace(/^http/, "ws");
+      const wsUrl = `${wsHost}/stores/${store}/repos/${repo}/branches/${encodeURIComponent(branch)}/coordinate/tail?token=${client.getApiKey()}`;
 
       info(`Watching ${store}/${repo}:${branch}...`);
       console.log(color("Press Ctrl+C to stop", "dim"));
@@ -176,18 +193,15 @@ export function registerCoordinateCommands(program: Command): void {
           const timestamp = new Date().toLocaleTimeString();
           const eventType = color(msg.type || "event", "cyan");
 
-          if (msg.type === "commit") {
+          if (msg.type === "activity" && msg.activity) {
+            const act = msg.activity;
             console.log(
-              `[${timestamp}] ${eventType} ${color(msg.sha?.slice(0, 7) || "", "yellow")} - ${msg.message || ""}`
+              `[${timestamp}] ${color(act.type, "cyan")} ${act.agent_id?.slice(0, 8) || ""}: ${act.claim || act.patterns?.join(", ") || ""}`
             );
-          } else if (msg.type?.startsWith("branch:")) {
-            console.log(
-              `[${timestamp}] ${eventType} ${msg.branch || msg.name || ""}`
-            );
-          } else if (msg.type === "claim" || msg.type === "release") {
-            console.log(
-              `[${timestamp}] ${eventType} ${msg.agent_id?.slice(0, 8) || ""}: ${msg.patterns?.join(", ") || ""}`
-            );
+          } else if (msg.type === "intent_update") {
+            console.log(`[${timestamp}] ${eventType} - ${msg.intents?.length || 0} active claims`);
+          } else if (msg.type === "presence_update") {
+            console.log(`[${timestamp}] ${eventType} - ${msg.presence?.length || 0} agents online`);
           } else {
             console.log(`[${timestamp}] ${eventType}`, JSON.stringify(msg));
           }

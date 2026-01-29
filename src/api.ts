@@ -83,8 +83,8 @@ export class ScrapsClient {
     return this.request<T>("PATCH", path, body);
   }
 
-  delete<T = any>(path: string): Promise<T> {
-    return this.request<T>("DELETE", path);
+  delete<T = any>(path: string, body?: any): Promise<T> {
+    return this.request<T>("DELETE", path, body);
   }
 }
 

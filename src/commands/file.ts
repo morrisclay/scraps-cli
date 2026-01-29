@@ -49,7 +49,7 @@ export function registerFileCommands(program: Command): void {
 
       try {
         const result = await client.get(
-          `/api/v1/stores/${store}/repos/${repo}/files/${branch}/${path}`
+          `/api/v1/stores/${store}/repos/${repo}/files/${encodeURIComponent(branch)}/${path}`
         );
         // Output raw content
         console.log(result.content);
@@ -70,14 +70,15 @@ export function registerFileCommands(program: Command): void {
 
       try {
         const url = treePath
-          ? `/api/v1/stores/${store}/repos/${repo}/tree/${branch}/${treePath}`
-          : `/api/v1/stores/${store}/repos/${repo}/tree/${branch}`;
+          ? `/api/v1/stores/${store}/repos/${repo}/tree/${encodeURIComponent(branch)}/${treePath}`
+          : `/api/v1/stores/${store}/repos/${repo}/tree/${encodeURIComponent(branch)}`;
         const result = await client.get(url);
+        const entries = result.entries || result.tree || result;
 
-        if (Array.isArray(result)) {
-          output(result, {
+        if (Array.isArray(entries)) {
+          output(entries, {
             headers: ["Type", "Name", "SHA"],
-            rows: result.map((entry: any) => [
+            rows: entries.map((entry: any) => [
               entry.type === "tree" ? color("dir", "blue") : "file",
               entry.name + (entry.type === "tree" ? "/" : ""),
               entry.sha?.slice(0, 7) || "",
@@ -101,9 +102,10 @@ export function registerFileCommands(program: Command): void {
       const { store, repo, branch } = parseFileRef(ref + ":");
 
       try {
-        const commits = await client.get(
-          `/api/v1/stores/${store}/repos/${repo}/log/${branch}?limit=${opts.limit}`
+        const result = await client.get(
+          `/api/v1/stores/${store}/repos/${repo}/log/${encodeURIComponent(branch)}?limit=${opts.limit}`
         );
+        const commits = result.commits || result;
 
         if (Array.isArray(commits)) {
           for (const commit of commits) {
@@ -112,13 +114,17 @@ export function registerFileCommands(program: Command): void {
               commit.message?.split("\n")[0] || ""
             );
             if (commit.author) {
+              const authorStr = typeof commit.author === "string"
+                ? commit.author
+                : `${commit.author.name} <${commit.author.email}>`;
               console.log(
-                color(`  Author: ${commit.author}`, "dim")
+                color(`  Author: ${authorStr}`, "dim")
               );
             }
             if (commit.date || commit.timestamp) {
+              const ts = commit.timestamp ? commit.timestamp * 1000 : commit.date;
               console.log(
-                color(`  Date:   ${new Date(commit.date || commit.timestamp).toLocaleString()}`, "dim")
+                color(`  Date:   ${new Date(ts).toLocaleString()}`, "dim")
               );
             }
             console.log();
