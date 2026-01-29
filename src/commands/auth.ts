@@ -28,6 +28,14 @@ export function registerAuthCommands(program: Command): void {
     .description("Login with API key")
     .option("-k, --key <key>", "API key (prompts if not provided)")
     .option("-h, --host <host>", "Server host")
+    .addHelpText("after", `
+Saves your API key to ~/.scraps/credentials.json for future commands.
+
+Examples:
+  scraps login                               # Interactive prompt
+  scraps login --key scraps_abc123           # Provide key directly
+  scraps login --host https://custom.server  # Use custom server
+`)
     .action(async (opts) => {
       const config = loadConfig();
       const host = opts.host || config.default_host;
@@ -63,6 +71,12 @@ export function registerAuthCommands(program: Command): void {
     .command("logout")
     .description("Clear saved credentials")
     .option("-h, --host <host>", "Server host")
+    .addHelpText("after", `
+Removes saved credentials from ~/.scraps/credentials.json
+
+Example:
+  scraps logout
+`)
     .action((opts) => {
       const config = loadConfig();
       const host = opts.host || config.default_host;
@@ -74,6 +88,12 @@ export function registerAuthCommands(program: Command): void {
     .command("whoami")
     .description("Show current user info")
     .option("-h, --host <host>", "Server host")
+    .addHelpText("after", `
+Shows username, email, and user ID for the currently logged in account.
+
+Example:
+  scraps whoami
+`)
     .action(async (opts) => {
       const config = loadConfig();
       const host = opts.host || config.default_host;
@@ -109,6 +129,14 @@ export function registerAuthCommands(program: Command): void {
     .option("-u, --username <username>", "Username")
     .option("-e, --email <email>", "Email")
     .option("-h, --host <host>", "Server host")
+    .addHelpText("after", `
+Creates a new account and automatically logs you in.
+Your API key will be displayed once - save it securely!
+
+Examples:
+  scraps signup                              # Interactive prompts
+  scraps signup -u alice -e alice@example.com
+`)
     .action(async (opts) => {
       const config = loadConfig();
       const host = opts.host || config.default_host;

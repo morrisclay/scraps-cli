@@ -21,6 +21,24 @@ export function registerCommitCommand(program: Command): void {
     .option("-a, --author <name>", "Author name")
     .option("-e, --email <email>", "Author email")
     .option("--base <sha>", "Base commit SHA (for optimistic locking)")
+    .addHelpText("after", `
+Format: store/repo <files...> -b branch -m message
+
+This command creates commits directly via the API without needing local git.
+Perfect for agents and automation workflows.
+
+Examples:
+  scraps commit alice/my-project README.md -b main -m "Update readme"
+  scraps commit alice/my-project src/app.ts src/utils.ts -b feature/auth -m "Add auth"
+  scraps commit myteam/backend config.json -b main -m "Update config" --base abc1234
+
+Options explained:
+  -b, --branch    Required. The branch to commit to
+  -m, --message   Required. The commit message
+  -a, --author    Optional. Override author name
+  -e, --email     Optional. Override author email
+  --base          Optional. Expect this SHA as the current HEAD (for conflict detection)
+`)
     .action(async (ref, files, opts) => {
       const client = requireAuth();
       const { store, repo } = parseRepoRef(ref);

@@ -26,11 +26,30 @@ function parseRepoRef(ref: string): { store: string; repo: string; branch?: stri
 export function registerCoordinateCommands(program: Command): void {
   const coordinate = program
     .command("coordinate")
-    .description("Multi-agent coordination");
+    .description("Multi-agent coordination for preventing edit conflicts")
+    .addHelpText("after", `
+Multi-agent coordination allows multiple agents to claim file patterns,
+preventing conflicts when working on the same repository.
+
+Format: store/repo:branch
+
+Examples:
+  scraps coordinate status alice/my-project:main
+  scraps coordinate claim alice/my-project:main "src/**" -m "Refactoring src"
+  scraps coordinate release alice/my-project:main "src/**" --agent-id cli-abc123
+  scraps coordinate watch alice/my-project:main
+`);
 
   coordinate
     .command("status <store/repo:branch>")
-    .description("Show coordination status")
+    .description("Show coordination status (active claims, agents, recent activity)")
+    .addHelpText("after", `
+Format: store/repo:branch
+
+Examples:
+  scraps coordinate status alice/my-project:main
+  scraps coordinate status myteam/backend:feature/auth
+`)
     .action(async (ref) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);
@@ -96,6 +115,23 @@ export function registerCoordinateCommands(program: Command): void {
     .option("-m, --message <message>", "Description of planned changes", "CLI claim")
     .option("--agent-id <id>", "Agent ID (auto-generated if not provided)")
     .option("--ttl <seconds>", "Claim TTL in seconds", "300")
+    .addHelpText("after", `
+Format: store/repo:branch <patterns...>
+
+Patterns use glob syntax (e.g., "src/**", "*.ts", "docs/api/*").
+Claims prevent other agents from claiming overlapping patterns.
+
+Examples:
+  scraps coordinate claim alice/my-project:main "src/**" -m "Refactoring"
+  scraps coordinate claim alice/my-project:main "*.ts" "*.tsx" -m "Type fixes"
+  scraps coordinate claim myteam/backend:main "api/**" --ttl 600 -m "API update"
+  scraps coordinate claim alice/my-project:main "README.md" --agent-id my-agent-123
+
+Options:
+  -m, --message   Description shown to other agents (default: "CLI claim")
+  --agent-id      Your agent ID (auto-generated if not provided, save for release)
+  --ttl           Time-to-live in seconds before auto-release (default: 300)
+`)
     .action(async (ref, patterns, opts) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);
@@ -141,6 +177,16 @@ export function registerCoordinateCommands(program: Command): void {
     .command("release <store/repo:branch> <patterns...>")
     .description("Release claimed file patterns")
     .requiredOption("--agent-id <id>", "Agent ID that owns the claims")
+    .addHelpText("after", `
+Format: store/repo:branch <patterns...> --agent-id <id>
+
+Release patterns you previously claimed. You must provide the same agent ID
+that was used when claiming.
+
+Examples:
+  scraps coordinate release alice/my-project:main "src/**" --agent-id cli-abc123
+  scraps coordinate release myteam/backend:main "api/**" "docs/**" --agent-id my-agent
+`)
     .action(async (ref, patterns, opts) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);
@@ -167,7 +213,17 @@ export function registerCoordinateCommands(program: Command): void {
 
   coordinate
     .command("watch <store/repo:branch>")
-    .description("Watch coordination activity in real-time")
+    .description("Watch coordination activity in real-time via WebSocket")
+    .addHelpText("after", `
+Format: store/repo:branch
+
+Streams live coordination events: claims, releases, presence updates.
+Press Ctrl+C to stop.
+
+Examples:
+  scraps coordinate watch alice/my-project:main
+  scraps coordinate watch myteam/backend:feature/auth
+`)
     .action(async (ref) => {
       const client = requireAuth();
       const { store, repo, branch } = parseRepoRef(ref);

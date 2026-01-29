@@ -16,7 +16,28 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.1.2");
+  .version("0.1.3")
+  .addHelpText("after", `
+Getting Started:
+  scraps signup                              # Create an account
+  scraps login                               # Login with API key
+  scraps store create mystore                # Create a store
+  scraps repo create mystore/my-project      # Create a repository
+
+Common Commands:
+  scraps repo list                           # List all repositories
+  scraps file tree mystore/my-project:main   # Browse files
+  scraps file read mystore/my-project:main:README.md
+  scraps commit mystore/my-project file.txt -b main -m "message"
+  scraps watch mystore/my-project            # Stream live events
+
+Multi-Agent Coordination:
+  scraps coordinate status mystore/my-project:main
+  scraps coordinate claim mystore/my-project:main "src/**" -m "Working on src"
+  scraps coordinate watch mystore/my-project:main
+
+For more info on a command, run: scraps <command> --help
+`);
 
 // Config command
 program
@@ -25,6 +46,16 @@ program
   .option("--host <host>", "Set default host")
   .option("--output <format>", "Set output format (table, json)")
   .option("--show", "Show current config")
+  .addHelpText("after", `
+Configuration is stored in ~/.scraps/config.json
+
+Examples:
+  scraps config                              # Show current config
+  scraps config --show                       # Show current config
+  scraps config --host https://custom.server # Set default server
+  scraps config --output json                # Always output as JSON
+  scraps config --output table               # Always output as table
+`)
   .action((opts) => {
     const config = loadConfig();
 

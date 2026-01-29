@@ -33,11 +33,27 @@ function parseFileRef(ref: string): {
 }
 
 export function registerFileCommands(program: Command): void {
-  const file = program.command("file").description("Read files from repositories");
+  const file = program
+    .command("file")
+    .description("Read files from repositories")
+    .addHelpText("after", `
+Examples:
+  scraps file read alice/my-project:main:README.md    # Read a file
+  scraps file tree alice/my-project:main              # List root directory
+  scraps file tree alice/my-project:main src/         # List subdirectory
+`);
 
   file
     .command("read <store/repo:branch:path>")
     .description("Read a file from a repository")
+    .addHelpText("after", `
+Format: store/repo:branch:path
+
+Examples:
+  scraps file read alice/my-project:main:README.md
+  scraps file read alice/my-project:feature/auth:src/index.ts
+  scraps file read myteam/backend:v2.0:config/settings.json
+`)
     .action(async (ref) => {
       const client = requireAuth();
       const { store, repo, branch, path } = parseFileRef(ref);
@@ -62,6 +78,14 @@ export function registerFileCommands(program: Command): void {
   file
     .command("tree <store/repo:branch> [path]")
     .description("List files in a directory")
+    .addHelpText("after", `
+Format: store/repo:branch [path]
+
+Examples:
+  scraps file tree alice/my-project:main             # List root directory
+  scraps file tree alice/my-project:main src/        # List src/ directory
+  scraps file tree alice/my-project:feature/login components/
+`)
     .action(async (ref, path) => {
       const client = requireAuth();
       const parsed = parseFileRef(ref + (path ? `:${path}` : ":"));
@@ -97,6 +121,14 @@ export function registerFileCommands(program: Command): void {
     .command("log <store/repo:branch>")
     .description("Show commit history")
     .option("-n, --limit <count>", "Number of commits to show", "10")
+    .addHelpText("after", `
+Format: store/repo:branch
+
+Examples:
+  scraps log alice/my-project:main                   # Show last 10 commits
+  scraps log alice/my-project:main -n 5              # Show last 5 commits
+  scraps log alice/my-project:feature/auth --limit 20
+`)
     .action(async (ref, opts) => {
       const client = requireAuth();
       const { store, repo, branch } = parseFileRef(ref + ":");

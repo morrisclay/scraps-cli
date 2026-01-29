@@ -3,7 +3,20 @@ import { requireAuth } from "../api.js";
 import { success, error, info, output, truncate } from "../utils/output.js";
 
 export function registerTokenCommands(program: Command): void {
-  const token = program.command("token").description("Manage API keys and tokens");
+  const token = program
+    .command("token")
+    .description("Manage API keys and scoped tokens")
+    .addHelpText("after", `
+API Keys: Full access tokens for your account
+Scoped Tokens: Limited access tokens for specific stores/repos (great for agents)
+
+Examples:
+  scraps token create --name "CI bot"                    # Create API key
+  scraps token create --scoped -s mystore -p read        # Create scoped token
+  scraps token list                                      # List all tokens
+  scraps token revoke abc12345                           # Revoke an API key
+  scraps token revoke abc12345 --token                   # Revoke a scoped token
+`);
 
   token
     .command("create")
@@ -14,6 +27,22 @@ export function registerTokenCommands(program: Command): void {
     .option("-r, --repo <repo>", "Repository name (for scoped token)")
     .option("-p, --permission <permission>", "Permission level (for scoped token)", "read")
     .option("--expires <days>", "Expiration in days (for scoped token)")
+    .addHelpText("after", `
+Examples:
+  # Create a named API key (full access)
+  scraps token create --name "My laptop"
+
+  # Create a scoped token for read access to a store
+  scraps token create --scoped -s alice -p read
+
+  # Create a scoped token for write access to a specific repo
+  scraps token create --scoped -s alice -r my-project -p write --name "CI deploy"
+
+  # Create an expiring token (30 days)
+  scraps token create --scoped -s mystore -p read --expires 30
+
+Permission levels: read, write, admin
+`)
     .action(async (opts) => {
       const client = requireAuth();
 
@@ -63,6 +92,12 @@ export function registerTokenCommands(program: Command): void {
     .description("List API keys and tokens")
     .option("--keys", "List only API keys")
     .option("--tokens", "List only scoped tokens")
+    .addHelpText("after", `
+Examples:
+  scraps token list              # List all API keys and scoped tokens
+  scraps token list --keys       # List only API keys
+  scraps token list --tokens     # List only scoped tokens
+`)
     .action(async (opts) => {
       const client = requireAuth();
 
@@ -113,6 +148,13 @@ export function registerTokenCommands(program: Command): void {
     .command("revoke <id>")
     .description("Revoke an API key or token")
     .option("--token", "Revoke a scoped token (default is API key)")
+    .addHelpText("after", `
+Examples:
+  scraps token revoke abc12345              # Revoke an API key
+  scraps token revoke abc12345 --token      # Revoke a scoped token
+
+Use 'scraps token list' to find token IDs.
+`)
     .action(async (id, opts) => {
       const client = requireAuth();
       const endpoint = opts.token ? "/api/v1/scoped-tokens" : "/api/v1/api-keys";

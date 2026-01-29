@@ -27,6 +27,24 @@ export function registerWatchCommand(program: Command): void {
     .description("Watch repository events in real-time (commits, branch updates)")
     .option("-b, --branch <branch>", "Filter to specific branch")
     .option("--last-event <id>", "Resume from event ID")
+    .addHelpText("after", `
+Streams live repository events via WebSocket: commits, branch creates/deletes/updates.
+Press Ctrl+C to stop.
+
+Format: store/repo
+
+Examples:
+  scraps watch alice/my-project                     # Watch all branches
+  scraps watch alice/my-project -b main             # Watch only main branch
+  scraps watch alice/my-project --last-event 42     # Resume from event ID
+
+Event types shown:
+  commit         - New commit pushed
+  branch:create  - New branch created
+  branch:delete  - Branch deleted
+  branch:update  - Branch ref updated
+  ref:update     - Any ref updated
+`)
     .action(async (ref, opts) => {
       const client = requireAuth();
       const { store, repo } = parseRepoRef(ref);
