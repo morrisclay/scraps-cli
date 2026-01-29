@@ -47,24 +47,40 @@ Permission levels: read, write, admin
       const client = requireAuth();
 
       if (opts.scoped) {
-        // Create scoped token
-        const body: any = {};
-        if (opts.name) body.name = opts.name;
-        if (opts.store) body.store = opts.store;
-        if (opts.repo) body.repo = opts.repo;
-        if (opts.permission) body.permission = opts.permission;
-        if (opts.expires) {
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + parseInt(opts.expires));
-          body.expires_at = expiresAt.toISOString();
-        }
-
+        // Create scoped token - need to resolve store slug to store_id first
         try {
+          // Build scope object
+          const scope: any = {};
+
+          if (opts.store) {
+            // Resolve store slug to store_id
+            const storeResult = await client.get(`/api/v1/stores/${opts.store}`);
+            const store = storeResult.store || storeResult;
+            scope.store_id = store.id;
+          }
+
+          if (opts.repo) {
+            scope.repos = [opts.repo];
+          }
+
+          if (opts.permission) {
+            scope.permissions = [opts.permission];
+          }
+
+          const body: any = { scope };
+          if (opts.name) body.label = opts.name;
+          if (opts.expires) {
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + parseInt(opts.expires));
+            body.expires_at = expiresAt.toISOString();
+          }
+
           const result = await client.post("/api/v1/scoped-tokens", body);
           success("Scoped token created");
-          info(`Token: ${result.token}`);
-          if (result.scope) {
-            info(`Scope: ${JSON.stringify(result.scope)}`);
+          info(`Token: ${result.raw_key}`);
+          info("Save this token - it won't be shown again");
+          if (result.scoped_token?.scope) {
+            info(`Scope: ${JSON.stringify(result.scoped_token.scope)}`);
           }
         } catch (e: any) {
           error(`Failed to create token: ${e.message}`);
@@ -78,7 +94,7 @@ Permission levels: read, write, admin
         try {
           const result = await client.post("/api/v1/api-keys", body);
           success("API key created");
-          info(`Key: ${result.api_key || result.key}`);
+          info(`Key: ${result.raw_key}`);
           info("Save this key - it won't be shown again");
         } catch (e: any) {
           error(`Failed to create API key: ${e.message}`);
@@ -104,19 +120,25 @@ Examples:
       if (!opts.tokens) {
         // List API keys
         try {
-          const keys = await client.get("/api/v1/api-keys");
+          const result = await client.get("/api/v1/api-keys");
+          const keys = result.api_keys || result;
           console.log("\nAPI Keys:");
-          output(keys, {
-            headers: ["ID", "Name", "Created", "Last Used"],
-            rows: keys.map((k: any) => [
-              k.id?.slice(0, 8) || "",
-              k.name || "(unnamed)",
-              new Date(k.created_at).toLocaleDateString(),
-              k.last_used_at
-                ? new Date(k.last_used_at).toLocaleDateString()
-                : "never",
-            ]),
-          });
+          if (!Array.isArray(keys) || keys.length === 0) {
+            info("No API keys found");
+          } else {
+            output(keys, {
+              headers: ["ID", "Label", "Prefix", "Created", "Last Used"],
+              rows: keys.map((k: any) => [
+                k.id?.slice(0, 8) || "",
+                k.label || "(unnamed)",
+                k.key_prefix || "",
+                new Date(k.created_at).toLocaleDateString(),
+                k.last_used_at
+                  ? new Date(k.last_used_at).toLocaleDateString()
+                  : "never",
+              ]),
+            });
+          }
         } catch (e: any) {
           error(`Failed to list API keys: ${e.message}`);
         }
@@ -125,19 +147,24 @@ Examples:
       if (!opts.keys) {
         // List scoped tokens
         try {
-          const tokens = await client.get("/api/v1/scoped-tokens");
+          const result = await client.get("/api/v1/scoped-tokens");
+          const tokens = result.scoped_tokens || result;
           console.log("\nScoped Tokens:");
-          output(tokens, {
-            headers: ["ID", "Name", "Scope", "Expires"],
-            rows: tokens.map((t: any) => [
-              t.id?.slice(0, 8) || "",
-              t.name || "(unnamed)",
-              truncate(JSON.stringify(t.scope || {}), 30),
-              t.expires_at
-                ? new Date(t.expires_at).toLocaleDateString()
-                : "never",
-            ]),
-          });
+          if (!Array.isArray(tokens) || tokens.length === 0) {
+            info("No scoped tokens found");
+          } else {
+            output(tokens, {
+              headers: ["ID", "Label", "Scope", "Expires"],
+              rows: tokens.map((t: any) => [
+                t.id?.slice(0, 8) || "",
+                t.label || "(unnamed)",
+                truncate(JSON.stringify(t.scope || {}), 30),
+                t.expires_at
+                  ? new Date(t.expires_at).toLocaleDateString()
+                  : "never",
+              ]),
+            });
+          }
         } catch (e: any) {
           error(`Failed to list tokens: ${e.message}`);
         }
