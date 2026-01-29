@@ -29,7 +29,7 @@ export function loadConfig(): Config {
   ensureConfigDir();
   if (!existsSync(CONFIG_FILE)) {
     return {
-      default_host: "https://scraps.sh",
+      default_host: "https://api.scraps.sh",
       output_format: "table",
     };
   }
