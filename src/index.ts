@@ -3,8 +3,6 @@ import { Command } from "commander";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerStoreCommands } from "./commands/store.js";
 import { registerRepoCommands } from "./commands/repo.js";
-import { registerCommitCommand } from "./commands/commit.js";
-import { registerBranchCommands } from "./commands/branch.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerTokenCommands } from "./commands/token.js";
 import { registerCoordinateCommands } from "./commands/coordinate.js";
@@ -16,7 +14,7 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.1.6")
+  .version("0.2.0")
   .addHelpText("after", `
 Getting Started:
   scraps signup                              # Create an account
@@ -28,7 +26,6 @@ Common Commands:
   scraps repo list                           # List all repositories
   scraps file tree mystore/my-project:main   # Browse files
   scraps file read mystore/my-project:main:README.md
-  scraps commit mystore/my-project file.txt -b main -m "message"
   scraps watch mystore/my-project            # Stream live events
 
 Multi-Agent Coordination:
@@ -83,8 +80,6 @@ Examples:
 registerAuthCommands(program);
 registerStoreCommands(program);
 registerRepoCommands(program);
-registerCommitCommand(program);
-registerBranchCommands(program);
 registerFileCommands(program);
 registerTokenCommands(program);
 registerCoordinateCommands(program);
