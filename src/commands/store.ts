@@ -26,7 +26,8 @@ export function registerStoreCommands(program: Command): void {
     .action(async () => {
       const client = requireAuth();
       try {
-        const stores = await client.get("/api/v1/stores");
+        const result = await client.get("/api/v1/stores");
+        const stores = result.stores || result;
         output(stores, {
           headers: ["Slug", "Role", "Created"],
           rows: stores.map((s: any) => [
@@ -47,13 +48,14 @@ export function registerStoreCommands(program: Command): void {
     .action(async (slug) => {
       const client = requireAuth();
       try {
-        const s = await client.get(`/api/v1/stores/${slug}`);
+        const result = await client.get(`/api/v1/stores/${slug}`);
+        const s = result.store || result;
         output(s, {
           headers: ["Field", "Value"],
           rows: [
             ["ID", s.id],
             ["Slug", s.slug],
-            ["Owner", s.owner_id],
+            ["Owner", s.owner_user_id || s.owner_id],
             ["Created", new Date(s.created_at).toLocaleDateString()],
           ],
         });
@@ -87,9 +89,10 @@ export function registerStoreCommands(program: Command): void {
       const client = requireAuth();
       try {
         const result = await client.get(`/api/v1/stores/${slug}/members`);
-        output(result, {
+        const members = result.members || result;
+        output(members, {
           headers: ["Username", "Role", "Joined"],
-          rows: result.map((m: any) => [
+          rows: members.map((m: any) => [
             m.username,
             m.role,
             new Date(m.created_at).toLocaleDateString(),
@@ -126,7 +129,15 @@ export function registerStoreCommands(program: Command): void {
     .action(async (slug, username, opts) => {
       const client = requireAuth();
       try {
-        await client.patch(`/api/v1/stores/${slug}/members/${username}`, {
+        // Look up userId from username
+        const result = await client.get(`/api/v1/stores/${slug}/members`);
+        const members = result.members || result;
+        const member = members.find((m: any) => m.username === username);
+        if (!member) {
+          error(`Member '${username}' not found in store`);
+          process.exit(1);
+        }
+        await client.patch(`/api/v1/stores/${slug}/members/${member.id}`, {
           role: opts.role,
         });
         success(`Updated ${username}'s role to ${opts.role}`);
@@ -142,7 +153,15 @@ export function registerStoreCommands(program: Command): void {
     .action(async (slug, username) => {
       const client = requireAuth();
       try {
-        await client.delete(`/api/v1/stores/${slug}/members/${username}`);
+        // Look up userId from username
+        const result = await client.get(`/api/v1/stores/${slug}/members`);
+        const members = result.members || result;
+        const member = members.find((m: any) => m.username === username);
+        if (!member) {
+          error(`Member '${username}' not found in store`);
+          process.exit(1);
+        }
+        await client.delete(`/api/v1/stores/${slug}/members/${member.id}`);
         success(`Removed ${username} from ${slug}`);
       } catch (e: any) {
         error(`Failed to remove member: ${e.message}`);

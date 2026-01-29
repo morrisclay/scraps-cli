@@ -37,7 +37,8 @@ export function registerRepoCommands(program: Command): void {
     .action(async (store) => {
       const client = requireAuth();
       try {
-        const repos = await client.get(`/api/v1/stores/${store}/repos`);
+        const result = await client.get(`/api/v1/stores/${store}/repos`);
+        const repos = result.repos || result;
         output(repos, {
           headers: ["Name", "Default Branch", "Created"],
           rows: repos.map((r: any) => [
@@ -59,7 +60,8 @@ export function registerRepoCommands(program: Command): void {
       const client = requireAuth();
       const { store, repo: name } = parseRepoRef(ref);
       try {
-        const r = await client.get(`/api/v1/stores/${store}/repos/${name}`);
+        const result = await client.get(`/api/v1/stores/${store}/repos/${name}`);
+        const r = result.repo || result;
         output(r, {
           headers: ["Field", "Value"],
           rows: [
@@ -106,11 +108,12 @@ export function registerRepoCommands(program: Command): void {
         const result = await client.get(
           `/api/v1/stores/${store}/repos/${name}/collaborators`
         );
-        output(result, {
-          headers: ["Username", "Permission", "Added"],
-          rows: result.map((c: any) => [
+        const collabs = result.collaborators || result;
+        output(collabs, {
+          headers: ["Username", "Role", "Added"],
+          rows: collabs.map((c: any) => [
             c.username,
-            c.permission,
+            c.role,
             new Date(c.created_at).toLocaleDateString(),
           ]),
         });
@@ -123,16 +126,16 @@ export function registerRepoCommands(program: Command): void {
   collaborators
     .command("add <store/name> <username>")
     .description("Add a collaborator to the repository")
-    .option("-p, --permission <permission>", "Permission (write, read)", "read")
+    .option("-r, --role <role>", "Role (read, write, admin)", "read")
     .action(async (ref, username, opts) => {
       const client = requireAuth();
       const { store, repo: name } = parseRepoRef(ref);
       try {
         await client.post(`/api/v1/stores/${store}/repos/${name}/collaborators`, {
           username,
-          permission: opts.permission,
+          role: opts.role,
         });
-        success(`Added ${username} to ${store}/${name} with ${opts.permission} access`);
+        success(`Added ${username} to ${store}/${name} with ${opts.role} access`);
       } catch (e: any) {
         error(`Failed to add collaborator: ${e.message}`);
         process.exit(1);
@@ -146,8 +149,18 @@ export function registerRepoCommands(program: Command): void {
       const client = requireAuth();
       const { store, repo: name } = parseRepoRef(ref);
       try {
+        // Look up userId from username
+        const result = await client.get(
+          `/api/v1/stores/${store}/repos/${name}/collaborators`
+        );
+        const collabs = result.collaborators || result;
+        const collab = collabs.find((c: any) => c.username === username);
+        if (!collab) {
+          error(`Collaborator '${username}' not found`);
+          process.exit(1);
+        }
         await client.delete(
-          `/api/v1/stores/${store}/repos/${name}/collaborators/${username}`
+          `/api/v1/stores/${store}/repos/${name}/collaborators/${collab.id}`
         );
         success(`Removed ${username} from ${store}/${name}`);
       } catch (e: any) {

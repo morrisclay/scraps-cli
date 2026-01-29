@@ -31,7 +31,7 @@ export function registerTokenCommands(program: Command): void {
         }
 
         try {
-          const result = await client.post("/api/v1/tokens", body);
+          const result = await client.post("/api/v1/scoped-tokens", body);
           success("Scoped token created");
           info(`Token: ${result.token}`);
           if (result.scope) {
@@ -90,7 +90,7 @@ export function registerTokenCommands(program: Command): void {
       if (!opts.keys) {
         // List scoped tokens
         try {
-          const tokens = await client.get("/api/v1/tokens");
+          const tokens = await client.get("/api/v1/scoped-tokens");
           console.log("\nScoped Tokens:");
           output(tokens, {
             headers: ["ID", "Name", "Scope", "Expires"],
@@ -115,7 +115,7 @@ export function registerTokenCommands(program: Command): void {
     .option("--token", "Revoke a scoped token (default is API key)")
     .action(async (id, opts) => {
       const client = requireAuth();
-      const endpoint = opts.token ? "/api/v1/tokens" : "/api/v1/api-keys";
+      const endpoint = opts.token ? "/api/v1/scoped-tokens" : "/api/v1/api-keys";
 
       try {
         await client.delete(`${endpoint}/${id}`);

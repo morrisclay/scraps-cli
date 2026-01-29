@@ -45,7 +45,8 @@ export function registerAuthCommands(program: Command): void {
       // Validate the API key by fetching user info
       const client = new ScrapsClient(host, apiKey);
       try {
-        const user = await client.get("/api/v1/me");
+        const result = await client.get("/api/v1/user");
+        const user = result.user || result;
         setCredential(host, {
           api_key: apiKey,
           user_id: user.id,
@@ -85,7 +86,8 @@ export function registerAuthCommands(program: Command): void {
 
       const client = new ScrapsClient(host, cred.api_key);
       try {
-        const user = await client.get("/api/v1/me");
+        const result = await client.get("/api/v1/user");
+        const user = result.user || result;
         output(user, {
           headers: ["Field", "Value"],
           rows: [
