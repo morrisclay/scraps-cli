@@ -1,27 +1,40 @@
-# AGENTS.md - Multi-Agent Collaboration Guide
+---
+name: scraps-coordination
+description: Enables safe multi-agent collaboration on shared git repositories using the scraps.sh coordination primitives. Use this skill when multiple AI agents need to work on the same codebase simultaneously, when you need to claim files before editing to prevent conflicts, or when coordinating work with other agents.
+---
 
-This document instructs AI coding assistants (Claude Code, Gemini CLI, Cursor, etc.) on how to safely collaborate on shared codebases using the scraps.sh git server.
+# Scraps Multi-Agent Coordination
 
-## Overview
+This skill enables AI coding assistants to safely collaborate on shared codebases using the scraps.sh git server's coordination primitives: Claim, Release, and Watch.
 
-Scraps is a git hosting service with built-in coordination primitives for multi-agent development. When multiple AI agents work on the same repository simultaneously, they must coordinate to avoid conflicts. The core primitives are:
+## When to Use This Skill
 
-- **Claim** - Reserve file patterns before editing
-- **Release** - Relinquish claims when done
-- **Watch** - Monitor repository activity and claim changes in real-time
+Use this skill when:
 
-## Prerequisites
+- Multiple AI agents are working on the same repository simultaneously
+- You need to edit files in a shared codebase and want to prevent conflicts
+- You want to coordinate work with other agents on a team
+- You need to monitor repository activity or wait for files to become available
+- The codebase is hosted on scraps.sh
 
-Before using scraps commands, ensure you're authenticated:
+## What is Scraps?
+
+Scraps is a git hosting service with built-in coordination primitives for multi-agent development. The core commands are:
+
+- `scraps claim` - Reserve file patterns before editing
+- `scraps release` - Relinquish claims when done
+- `scraps watch` - Monitor repository activity and claim changes in real-time
+
+**Prerequisites:** Ensure you're authenticated before using scraps commands:
 
 ```bash
 scraps login
 scraps status  # Verify connection
 ```
 
-## Core Workflow
+## How to Coordinate with Other Agents
 
-### 1. Before Making Changes: Claim Your Files
+### Step 1: Claim Files Before Editing
 
 **Always claim the files you intend to modify before editing them.**
 
@@ -30,6 +43,7 @@ scraps claim <store/repo:branch> <patterns...> -m "<description>"
 ```
 
 Examples:
+
 ```bash
 # Claim a specific file
 scraps claim alice/webapp:main "src/components/Button.tsx" -m "Fixing button styling"
@@ -42,33 +56,35 @@ scraps claim alice/webapp:main "src/utils/**" "tests/utils/**" -m "Refactoring u
 ```
 
 **Options:**
-- `-m, --message <msg>` - Describe your planned changes (required for coordination)
-- `--ttl <seconds>` - Claim duration (default: 300s / 5 minutes)
-- `--agent-id <id>` - Your identifier (auto-generated if omitted)
+
+| Option | Description |
+|--------|-------------|
+| `-m, --message <msg>` | Describe your planned changes (required for coordination) |
+| `--ttl <seconds>` | Claim duration (default: 300s / 5 minutes) |
+| `--agent-id <id>` | Your identifier (auto-generated if omitted) |
 
 **Important:** Save the agent-id from your claim - you'll need it to release.
 
-### 2. Handle Claim Conflicts
+### Step 2: Handle Claim Conflicts
 
-If another agent has already claimed overlapping files, you'll receive a `claim_conflict` error showing:
-- Which patterns conflict
-- Which agent holds the conflicting claim
-- Their stated intent
+If another agent has already claimed overlapping files, you'll receive a `claim_conflict` error showing which patterns conflict, which agent holds the claim, and their stated intent.
 
 **When you encounter a conflict:**
+
 1. Wait for the other agent to release their claim
 2. Use `scraps watch <store/repo:branch> --claims` to monitor when files become available
 3. Choose different files to work on
 4. Coordinate with the other agent if possible
 
-### 3. Make Your Changes
+### Step 3: Make Your Changes
 
 Once your claim is successful:
+
 1. Make your code changes
 2. Commit and push using standard git commands
 3. Release your claim
 
-### 4. Release When Done
+### Step 4: Release When Done
 
 **Always release your claims after pushing changes or abandoning work.**
 
@@ -77,15 +93,15 @@ scraps release <store/repo:branch> <patterns...> --agent-id <your-agent-id>
 ```
 
 Example:
+
 ```bash
 scraps release alice/webapp:main "src/api/**" --agent-id cli-abc12345
 ```
 
 ## Monitoring Repository Activity
 
-### Watch for Changes
+### Watch for Commits and Branch Updates
 
-Monitor commits and branch updates:
 ```bash
 scraps watch alice/webapp           # All branches
 scraps watch alice/webapp -b main   # Specific branch
@@ -94,13 +110,14 @@ scraps watch alice/webapp -b main   # Specific branch
 ### Watch for Claim Activity
 
 Monitor when files become available or claimed:
+
 ```bash
 scraps watch alice/webapp:main --claims
 ```
 
 This streams events when agents claim or release files, helping you know when contested files become available.
 
-## Git Best Practices for Multi-Agent Collaboration
+## Best Practices
 
 ### Pull Before Claiming
 
@@ -109,7 +126,7 @@ git pull origin main
 scraps claim myteam/project:main "src/**" -m "Adding feature X"
 ```
 
-### Small, Focused Claims
+### Use Small, Focused Claims
 
 Claim only what you need. Broad claims like `"**"` block other agents unnecessarily.
 
@@ -123,30 +140,21 @@ scraps claim team/app:main "src/auth/login.ts" -m "Fixing login bug"
 scraps claim team/app:main "src/**" -m "Fixing login bug"  # Too broad
 ```
 
-### Short Claim Durations
+### Use Appropriate TTLs
 
-Use appropriate TTLs. If your task is quick, use a shorter TTL:
+If your task is quick, use a shorter TTL:
+
 ```bash
 scraps claim team/app:main "README.md" -m "Updating docs" --ttl 60
 ```
 
 ### Commit Frequently, Release Promptly
 
-1. Make incremental commits
-2. Push when you reach a stable state
-3. Release claims immediately after pushing
-
 ```bash
 git add -A && git commit -m "Add login validation"
 git push origin main
 scraps release team/app:main "src/auth/**" --agent-id cli-abc123
 ```
-
-### Handle Stale Claims
-
-Claims expire after their TTL. If you need more time:
-1. Release your current claim
-2. Re-claim with a fresh TTL
 
 ## Reference Formats
 
@@ -171,6 +179,7 @@ Claims use glob patterns:
 ## Command Reference
 
 ### Claim
+
 ```bash
 scraps claim <store/repo:branch> <patterns...> [options]
   -m, --message <msg>     Description of planned changes
@@ -179,11 +188,13 @@ scraps claim <store/repo:branch> <patterns...> [options]
 ```
 
 ### Release
+
 ```bash
 scraps release <store/repo:branch> <patterns...> --agent-id <id>
 ```
 
 ### Watch
+
 ```bash
 scraps watch <store/repo[:branch]> [options]
   -b, --branch <branch>   Filter to specific branch
@@ -192,12 +203,14 @@ scraps watch <store/repo[:branch]> [options]
 ```
 
 ### Clone
+
 ```bash
 scraps clone <store/repo> [directory]
   --url-only              Print clone URL only
 ```
 
 ### File Operations
+
 ```bash
 scraps file read <store/repo:branch:path>    # Read file content
 scraps file tree <store/repo:branch> [path]  # List directory
@@ -207,6 +220,7 @@ scraps log <store/repo:branch> [-n <count>]  # Commit history
 ## Example Multi-Agent Session
 
 **Agent A** (working on API):
+
 ```bash
 scraps claim team/app:main "src/api/**" "tests/api/**" -m "Adding user endpoints"
 # ... makes changes ...
@@ -216,6 +230,7 @@ scraps release team/app:main "src/api/**" "tests/api/**" --agent-id cli-aaa111
 ```
 
 **Agent B** (working on UI, runs concurrently):
+
 ```bash
 scraps claim team/app:main "src/components/**" -m "Building user profile component"
 # ... makes changes ...
@@ -225,6 +240,7 @@ scraps release team/app:main "src/components/**" --agent-id cli-bbb222
 ```
 
 **Agent C** (wants API files, must wait):
+
 ```bash
 scraps claim team/app:main "src/api/users.ts" -m "Fixing user validation"
 # Error: claim_conflict - Agent cli-aaa111 has claimed src/api/**
