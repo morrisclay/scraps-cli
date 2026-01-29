@@ -1,0 +1,134 @@
+import { Command } from "commander";
+import { requireAuth } from "../api.js";
+import { error, output, outputTable, color } from "../utils/output.js";
+
+// Parse store/repo:branch:path format
+function parseFileRef(ref: string): {
+  store: string;
+  repo: string;
+  branch: string;
+  path: string;
+} {
+  // Format: store/repo:branch:path or store/repo:branch
+  const colonParts = ref.split(":");
+  if (colonParts.length < 2) {
+    throw new Error("Invalid reference. Use format: store/repo:branch[:path]");
+  }
+
+  const repoRef = colonParts[0];
+  const branch = colonParts[1];
+  const path = colonParts.slice(2).join(":") || "";
+
+  const slashParts = repoRef.split("/");
+  if (slashParts.length !== 2) {
+    throw new Error("Invalid repo reference. Use format: store/repo:branch[:path]");
+  }
+
+  return {
+    store: slashParts[0],
+    repo: slashParts[1],
+    branch,
+    path,
+  };
+}
+
+export function registerFileCommands(program: Command): void {
+  const file = program.command("file").description("Read files from repositories");
+
+  file
+    .command("read <store/repo:branch:path>")
+    .description("Read a file from a repository")
+    .action(async (ref) => {
+      const client = requireAuth();
+      const { store, repo, branch, path } = parseFileRef(ref);
+
+      if (!path) {
+        error("Path is required. Use format: store/repo:branch:path");
+        process.exit(1);
+      }
+
+      try {
+        const result = await client.get(
+          `/api/v1/stores/${store}/repos/${repo}/files/${branch}/${path}`
+        );
+        // Output raw content
+        console.log(result.content);
+      } catch (e: any) {
+        error(`Failed to read file: ${e.message}`);
+        process.exit(1);
+      }
+    });
+
+  file
+    .command("tree <store/repo:branch> [path]")
+    .description("List files in a directory")
+    .action(async (ref, path) => {
+      const client = requireAuth();
+      const parsed = parseFileRef(ref + (path ? `:${path}` : ":"));
+      const { store, repo, branch } = parsed;
+      const treePath = path || parsed.path || "";
+
+      try {
+        const url = treePath
+          ? `/api/v1/stores/${store}/repos/${repo}/tree/${branch}/${treePath}`
+          : `/api/v1/stores/${store}/repos/${repo}/tree/${branch}`;
+        const result = await client.get(url);
+
+        if (Array.isArray(result)) {
+          output(result, {
+            headers: ["Type", "Name", "SHA"],
+            rows: result.map((entry: any) => [
+              entry.type === "tree" ? color("dir", "blue") : "file",
+              entry.name + (entry.type === "tree" ? "/" : ""),
+              entry.sha?.slice(0, 7) || "",
+            ]),
+          });
+        } else {
+          output(result);
+        }
+      } catch (e: any) {
+        error(`Failed to list tree: ${e.message}`);
+        process.exit(1);
+      }
+    });
+
+  program
+    .command("log <store/repo:branch>")
+    .description("Show commit history")
+    .option("-n, --limit <count>", "Number of commits to show", "10")
+    .action(async (ref, opts) => {
+      const client = requireAuth();
+      const { store, repo, branch } = parseFileRef(ref + ":");
+
+      try {
+        const commits = await client.get(
+          `/api/v1/stores/${store}/repos/${repo}/log/${branch}?limit=${opts.limit}`
+        );
+
+        if (Array.isArray(commits)) {
+          for (const commit of commits) {
+            console.log(
+              color(commit.sha?.slice(0, 7) || commit.commit?.slice(0, 7), "yellow"),
+              commit.message?.split("\n")[0] || ""
+            );
+            if (commit.author) {
+              console.log(
+                color(`  Author: ${commit.author}`, "dim")
+              );
+            }
+            if (commit.date || commit.timestamp) {
+              console.log(
+                color(`  Date:   ${new Date(commit.date || commit.timestamp).toLocaleString()}`, "dim")
+              );
+            }
+            console.log();
+          }
+        } else {
+          output(commits);
+        }
+      } catch (e: any) {
+        error(`Failed to get log: ${e.message}`);
+        process.exit(1);
+      }
+    });
+}
