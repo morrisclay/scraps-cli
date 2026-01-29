@@ -8,6 +8,7 @@ import { registerBranchCommands } from "./commands/branch.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerTokenCommands } from "./commands/token.js";
 import { registerCoordinateCommands } from "./commands/coordinate.js";
+import { registerWatchCommand } from "./commands/watch.js";
 import { loadConfig, saveConfig } from "./config.js";
 
 const program = new Command();
@@ -56,5 +57,6 @@ registerBranchCommands(program);
 registerFileCommands(program);
 registerTokenCommands(program);
 registerCoordinateCommands(program);
+registerWatchCommand(program);
 
 program.parse();
