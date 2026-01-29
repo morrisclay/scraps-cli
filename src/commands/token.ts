@@ -1,6 +1,48 @@
 import { Command } from "commander";
+import { createInterface } from "readline";
 import { requireAuth } from "../api.js";
-import { success, error, info, output, truncate } from "../utils/output.js";
+import { success, error, info, output, truncate, color } from "../utils/output.js";
+
+function prompt(question: string): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+async function promptChoice<T extends { display: string }>(
+  message: string,
+  choices: T[],
+  allowSkip = false
+): Promise<T | null> {
+  console.log(`\n${message}`);
+  choices.forEach((c, i) => {
+    console.log(`  ${color(`${i + 1}`, "cyan")}) ${c.display}`);
+  });
+  if (allowSkip) {
+    console.log(`  ${color("0", "dim")}) Skip`);
+  }
+
+  const answer = await prompt("Choice: ");
+  const num = parseInt(answer);
+
+  if (allowSkip && num === 0) {
+    return null;
+  }
+
+  if (num >= 1 && num <= choices.length) {
+    return choices[num - 1];
+  }
+
+  error("Invalid choice");
+  return promptChoice(message, choices, allowSkip);
+}
 
 export function registerTokenCommands(program: Command): void {
   const token = program
@@ -32,43 +74,99 @@ Examples:
   # Create a named API key (full access)
   scraps token create --name "My laptop"
 
-  # Create a scoped token for read access to a store
-  scraps token create --scoped -s alice -p read
+  # Create a scoped token interactively (prompts for store, repo, permission)
+  scraps token create --scoped
 
-  # Create a scoped token for write access to a specific repo
+  # Create a scoped token with all options specified
   scraps token create --scoped -s alice -r my-project -p write --name "CI deploy"
 
   # Create an expiring token (30 days)
   scraps token create --scoped -s mystore -p read --expires 30
 
-Permission levels: read, write, admin
+Permission levels: read, write
 `)
     .action(async (opts) => {
       const client = requireAuth();
 
       if (opts.scoped) {
-        // Create scoped token - need to resolve store slug to store_id first
+        // Create scoped token - interactive if options not provided
         try {
-          // Build scope object
           const scope: any = {};
+          let selectedStore: any = null;
+          let selectedRepo: any = null;
+          let permission = opts.permission;
 
+          // Step 1: Select store
           if (opts.store) {
-            // Resolve store slug to store_id
             const storeResult = await client.get(`/api/v1/stores/${opts.store}`);
-            const store = storeResult.store || storeResult;
-            scope.store_id = store.id;
+            selectedStore = storeResult.store || storeResult;
+          } else {
+            // Fetch stores and prompt
+            const storesResult = await client.get("/api/v1/stores");
+            const stores = storesResult.stores || storesResult;
+
+            if (stores.length === 0) {
+              error("No stores found. Create a store first.");
+              process.exit(1);
+            }
+
+            const storeChoice = await promptChoice(
+              "Select a store to scope the token to:",
+              stores.map((s: any) => ({ ...s, display: `${s.slug} (${s.role || "owner"})` }))
+            );
+            selectedStore = storeChoice;
           }
 
-          if (opts.repo) {
-            scope.repos = [opts.repo];
+          if (selectedStore) {
+            scope.store_id = selectedStore.id;
+
+            // Step 2: Optionally select repo
+            if (opts.repo) {
+              scope.repos = [opts.repo];
+            } else {
+              // Fetch repos and prompt
+              try {
+                const reposResult = await client.get(`/api/v1/stores/${selectedStore.slug}/repos`);
+                const repos = reposResult.repos || reposResult;
+
+                if (repos.length > 0) {
+                  const repoChoice = await promptChoice(
+                    "Scope to a specific repository? (optional)",
+                    repos.map((r: any) => ({ ...r, display: r.name })),
+                    true // allow skip
+                  );
+                  if (repoChoice) {
+                    selectedRepo = repoChoice;
+                    scope.repos = [selectedRepo.name];
+                  }
+                }
+              } catch {
+                // No repos or can't access, skip
+              }
+            }
           }
 
-          if (opts.permission) {
-            scope.permissions = [opts.permission];
+          // Step 3: Select permission
+          if (!permission || !["read", "write"].includes(permission)) {
+            const permChoice = await promptChoice(
+              "Select permission level:",
+              [
+                { value: "read", display: "read - Can view files and commits" },
+                { value: "write", display: "write - Can push commits and modify branches" },
+              ]
+            );
+            permission = permChoice?.value || "read";
+          }
+          scope.permissions = [permission];
+
+          // Step 4: Optional name
+          let label = opts.name;
+          if (!label) {
+            label = await prompt("Token label (optional): ");
           }
 
           const body: any = { scope };
-          if (opts.name) body.label = opts.name;
+          if (label) body.label = label;
           if (opts.expires) {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + parseInt(opts.expires));
@@ -76,12 +174,17 @@ Permission levels: read, write, admin
           }
 
           const result = await client.post("/api/v1/scoped-tokens", body);
+          console.log();
           success("Scoped token created");
           info(`Token: ${result.raw_key}`);
           info("Save this token - it won't be shown again");
-          if (result.scoped_token?.scope) {
-            info(`Scope: ${JSON.stringify(result.scoped_token.scope)}`);
-          }
+
+          // Show scope summary
+          const scopeSummary = [];
+          if (selectedStore) scopeSummary.push(`store: ${selectedStore.slug}`);
+          if (selectedRepo) scopeSummary.push(`repo: ${selectedRepo.name}`);
+          scopeSummary.push(`permission: ${permission}`);
+          info(`Scope: ${scopeSummary.join(", ")}`);
         } catch (e: any) {
           error(`Failed to create token: ${e.message}`);
           process.exit(1);

@@ -1,6 +1,6 @@
 {
   "name": "scraps-cli",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "CLI for Scraps serverless Git",
   "type": "module",
   "main": "dist/index.js",
