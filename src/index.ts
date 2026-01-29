@@ -3,10 +3,12 @@ import { Command } from "commander";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerStoreCommands } from "./commands/store.js";
 import { registerRepoCommands } from "./commands/repo.js";
+import { registerCloneCommand } from "./commands/clone.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerTokenCommands } from "./commands/token.js";
 import { registerCoordinateCommands } from "./commands/coordinate.js";
 import { registerWatchCommand } from "./commands/watch.js";
+import { registerStatusCommand } from "./commands/status.js";
 import { loadConfig, saveConfig } from "./config.js";
 
 const program = new Command();
@@ -14,16 +16,19 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.2.1")
+  .version("0.2.2")
   .addHelpText("after", `
 Getting Started:
   scraps signup                              # Create an account
   scraps login                               # Login with API key
+  scraps status                              # Check login status
   scraps store create mystore                # Create a store
   scraps repo create mystore/my-project      # Create a repository
+  scraps clone mystore/my-project            # Clone with git
 
 Common Commands:
   scraps repo list                           # List all repositories
+  scraps clone mystore/my-project            # Clone a repository
   scraps file tree mystore/my-project:main   # Browse files
   scraps file read mystore/my-project:main:README.md
   scraps watch mystore/my-project            # Stream live events
@@ -84,8 +89,10 @@ Examples:
 
 // Register all command groups
 registerAuthCommands(program);
+registerStatusCommand(program);
 registerStoreCommands(program);
 registerRepoCommands(program);
+registerCloneCommand(program);
 registerFileCommands(program);
 registerTokenCommands(program);
 registerCoordinateCommands(program);
