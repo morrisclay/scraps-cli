@@ -6,7 +6,7 @@ import { registerRepoCommands } from "./commands/repo.js";
 import { registerCloneCommand } from "./commands/clone.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerTokenCommands } from "./commands/token.js";
-import { registerCoordinateCommands } from "./commands/coordinate.js";
+import { registerFightCommands } from "./commands/fight.js";
 import { registerWatchCommand } from "./commands/watch.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { loadConfig, saveConfig } from "./config.js";
@@ -16,7 +16,7 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.2.2")
+  .version("0.2.4")
   .addHelpText("after", `
 Getting Started:
   scraps signup                              # Create an account
@@ -33,10 +33,10 @@ Common Commands:
   scraps file read mystore/my-project:main:README.md
   scraps watch mystore/my-project            # Stream live events
 
-Multi-Agent Coordination:
-  scraps coordinate status mystore/my-project:main
-  scraps coordinate claim mystore/my-project:main "src/**" -m "Working on src"
-  scraps coordinate watch mystore/my-project:main
+Fighting Over Scraps:
+  scraps fight status mystore/my-project:main
+  scraps fight claim mystore/my-project:main "src/**" -m "Working on src"
+  scraps fight watch mystore/my-project:main
 
 For more info on a command, run: scraps <command> --help
 `);
@@ -95,7 +95,7 @@ registerRepoCommands(program);
 registerCloneCommand(program);
 registerFileCommands(program);
 registerTokenCommands(program);
-registerCoordinateCommands(program);
+registerFightCommands(program);
 registerWatchCommand(program);
 
 program.parse();

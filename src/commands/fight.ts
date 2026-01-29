@@ -23,10 +23,10 @@ function parseRepoRef(ref: string): { store: string; repo: string; branch?: stri
   return { store: parts[0], repo: parts[1], branch };
 }
 
-export function registerCoordinateCommands(program: Command): void {
-  const coordinate = program
-    .command("coordinate")
-    .description("Multi-agent coordination for preventing edit conflicts")
+export function registerFightCommands(program: Command): void {
+  const fight = program
+    .command("fight")
+    .description("Fight over scraps - multi-agent coordination for preventing edit conflicts")
     .addHelpText("after", `
 Multi-agent coordination allows multiple agents to claim file patterns,
 preventing conflicts when working on the same repository.
@@ -34,21 +34,21 @@ preventing conflicts when working on the same repository.
 Format: store/repo:branch
 
 Examples:
-  scraps coordinate status alice/my-project:main
-  scraps coordinate claim alice/my-project:main "src/**" -m "Refactoring src"
-  scraps coordinate release alice/my-project:main "src/**" --agent-id cli-abc123
-  scraps coordinate watch alice/my-project:main
+  scraps fight status alice/my-project:main
+  scraps fight claim alice/my-project:main "src/**" -m "Refactoring src"
+  scraps fight release alice/my-project:main "src/**" --agent-id cli-abc123
+  scraps fight watch alice/my-project:main
 `);
 
-  coordinate
+  fight
     .command("status <store/repo:branch>")
     .description("Show coordination status (active claims, agents, recent activity)")
     .addHelpText("after", `
 Format: store/repo:branch
 
 Examples:
-  scraps coordinate status alice/my-project:main
-  scraps coordinate status myteam/backend:feature/auth
+  scraps fight status alice/my-project:main
+  scraps fight status myteam/backend:feature/auth
 `)
     .action(async (ref) => {
       const client = requireAuth();
@@ -109,7 +109,7 @@ Examples:
       }
     });
 
-  coordinate
+  fight
     .command("claim <store/repo:branch> <patterns...>")
     .description("Claim file patterns for editing")
     .option("-m, --message <message>", "Description of planned changes", "CLI claim")
@@ -122,10 +122,10 @@ Patterns use glob syntax (e.g., "src/**", "*.ts", "docs/api/*").
 Claims prevent other agents from claiming overlapping patterns.
 
 Examples:
-  scraps coordinate claim alice/my-project:main "src/**" -m "Refactoring"
-  scraps coordinate claim alice/my-project:main "*.ts" "*.tsx" -m "Type fixes"
-  scraps coordinate claim myteam/backend:main "api/**" --ttl 600 -m "API update"
-  scraps coordinate claim alice/my-project:main "README.md" --agent-id my-agent-123
+  scraps fight claim alice/my-project:main "src/**" -m "Refactoring"
+  scraps fight claim alice/my-project:main "*.ts" "*.tsx" -m "Type fixes"
+  scraps fight claim myteam/backend:main "api/**" --ttl 600 -m "API update"
+  scraps fight claim alice/my-project:main "README.md" --agent-id my-agent-123
 
 Options:
   -m, --message   Description shown to other agents (default: "CLI claim")
@@ -173,7 +173,7 @@ Options:
       }
     });
 
-  coordinate
+  fight
     .command("release <store/repo:branch> <patterns...>")
     .description("Release claimed file patterns")
     .requiredOption("--agent-id <id>", "Agent ID that owns the claims")
@@ -184,8 +184,8 @@ Release patterns you previously claimed. You must provide the same agent ID
 that was used when claiming.
 
 Examples:
-  scraps coordinate release alice/my-project:main "src/**" --agent-id cli-abc123
-  scraps coordinate release myteam/backend:main "api/**" "docs/**" --agent-id my-agent
+  scraps fight release alice/my-project:main "src/**" --agent-id cli-abc123
+  scraps fight release myteam/backend:main "api/**" "docs/**" --agent-id my-agent
 `)
     .action(async (ref, patterns, opts) => {
       const client = requireAuth();
@@ -211,7 +211,7 @@ Examples:
       }
     });
 
-  coordinate
+  fight
     .command("watch <store/repo:branch>")
     .description("Watch coordination activity in real-time via WebSocket")
     .addHelpText("after", `
@@ -221,8 +221,8 @@ Streams live coordination events: claims, releases, presence updates.
 Press Ctrl+C to stop.
 
 Examples:
-  scraps coordinate watch alice/my-project:main
-  scraps coordinate watch myteam/backend:feature/auth
+  scraps fight watch alice/my-project:main
+  scraps fight watch myteam/backend:feature/auth
 `)
     .action(async (ref) => {
       const client = requireAuth();
