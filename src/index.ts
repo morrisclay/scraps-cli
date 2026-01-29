@@ -6,7 +6,8 @@ import { registerRepoCommands } from "./commands/repo.js";
 import { registerCloneCommand } from "./commands/clone.js";
 import { registerFileCommands } from "./commands/file.js";
 import { registerTokenCommands } from "./commands/token.js";
-import { registerFightCommands } from "./commands/fight.js";
+import { registerClaimCommand } from "./commands/claim.js";
+import { registerReleaseCommand } from "./commands/release.js";
 import { registerWatchCommand } from "./commands/watch.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { loadConfig, saveConfig } from "./config.js";
@@ -16,7 +17,7 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.2.4")
+  .version("0.2.5")
   .addHelpText("after", `
 Getting Started:
   scraps signup                              # Create an account
@@ -33,10 +34,10 @@ Common Commands:
   scraps file read mystore/my-project:main:README.md
   scraps watch mystore/my-project            # Stream live events
 
-Fighting Over Scraps:
-  scraps fight status mystore/my-project:main
-  scraps fight claim mystore/my-project:main "src/**" -m "Working on src"
-  scraps fight watch mystore/my-project:main
+Fighting Over Scraps (multi-agent coordination):
+  scraps claim mystore/my-project:main "src/**" -m "Working on src"
+  scraps release mystore/my-project:main "src/**" --agent-id cli-abc123
+  scraps watch mystore/my-project:main --claims
 
 For more info on a command, run: scraps <command> --help
 `);
@@ -95,7 +96,8 @@ registerRepoCommands(program);
 registerCloneCommand(program);
 registerFileCommands(program);
 registerTokenCommands(program);
-registerFightCommands(program);
+registerClaimCommand(program);
+registerReleaseCommand(program);
 registerWatchCommand(program);
 
 program.parse();
