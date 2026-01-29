@@ -14,7 +14,7 @@ const program = new Command();
 program
   .name("scraps")
   .description("CLI for Scraps serverless Git")
-  .version("0.2.0")
+  .version("0.2.1")
   .addHelpText("after", `
 Getting Started:
   scraps signup                              # Create an account
@@ -57,12 +57,17 @@ Examples:
     const config = loadConfig();
 
     if (opts.show || (!opts.host && !opts.output)) {
-      console.log(JSON.stringify(config, null, 2));
+      console.log("Current configuration (~/.scraps/config.json):\n");
+      console.log(`  Host:   ${config.default_host}`);
+      console.log(`  Output: ${config.output_format}`);
       return;
     }
 
+    const changes: string[] = [];
+
     if (opts.host) {
       config.default_host = opts.host;
+      changes.push(`Host set to: ${opts.host}`);
     }
     if (opts.output) {
       if (opts.output !== "table" && opts.output !== "json") {
@@ -70,10 +75,11 @@ Examples:
         process.exit(1);
       }
       config.output_format = opts.output;
+      changes.push(`Output format set to: ${opts.output}`);
     }
 
     saveConfig(config);
-    console.log("Configuration updated");
+    changes.forEach((c) => console.log(`✓ ${c}`));
   });
 
 // Register all command groups
