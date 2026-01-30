@@ -10,8 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/scraps-sh/scraps-cli/internal/api"
-	"github.com/scraps-sh/scraps-cli/internal/tui"
+	"github.com/morrisclay/scraps-cli/internal/api"
+	"github.com/morrisclay/scraps-cli/internal/tui"
 )
 
 func newCloneCmd() *cobra.Command {

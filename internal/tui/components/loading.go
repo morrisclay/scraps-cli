@@ -3,7 +3,7 @@ package components
 import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/scraps-sh/scraps-cli/internal/tui"
+	"github.com/morrisclay/scraps-cli/internal/tui"
 )
 
 // LoadingModel is a loading spinner component.

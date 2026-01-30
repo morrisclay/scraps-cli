@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/scraps-sh/scraps-cli/internal/tui"
+	"github.com/morrisclay/scraps-cli/internal/tui"
 )
 
 // ConfirmModel is a confirmation dialog component.

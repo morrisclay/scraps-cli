@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/scraps-sh/scraps-cli/pkg/version"
+	"github.com/morrisclay/scraps-cli/pkg/version"
 )
 
 var rootCmd = &cobra.Command{

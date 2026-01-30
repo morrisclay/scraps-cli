@@ -11,11 +11,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
-	"github.com/scraps-sh/scraps-cli/internal/api"
-	"github.com/scraps-sh/scraps-cli/internal/config"
-	"github.com/scraps-sh/scraps-cli/internal/model"
-	"github.com/scraps-sh/scraps-cli/internal/tui"
-	"github.com/scraps-sh/scraps-cli/internal/ws"
+	"github.com/morrisclay/scraps-cli/internal/api"
+	"github.com/morrisclay/scraps-cli/internal/config"
+	"github.com/morrisclay/scraps-cli/internal/model"
+	"github.com/morrisclay/scraps-cli/internal/tui"
+	"github.com/morrisclay/scraps-cli/internal/ws"
 )
 
 func newWatchCmd() *cobra.Command {

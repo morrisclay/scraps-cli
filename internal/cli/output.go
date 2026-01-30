@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scraps-sh/scraps-cli/internal/config"
+	"github.com/morrisclay/scraps-cli/internal/config"
 	"golang.org/x/term"
 )
 

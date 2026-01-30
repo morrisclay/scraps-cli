@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/scraps-sh/scraps-cli/internal/model"
+	"github.com/morrisclay/scraps-cli/internal/model"
 )
 
 // parseStoreRepo parses a "store/repo" reference.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/scraps-sh/scraps-cli/internal/config"
+	"github.com/morrisclay/scraps-cli/internal/config"
 )
 
 func newConfigCmd() *cobra.Command {

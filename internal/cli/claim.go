@@ -6,9 +6,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"github.com/scraps-sh/scraps-cli/internal/api"
-	"github.com/scraps-sh/scraps-cli/internal/config"
-	"github.com/scraps-sh/scraps-cli/internal/model"
+	"github.com/morrisclay/scraps-cli/internal/api"
+	"github.com/morrisclay/scraps-cli/internal/config"
+	"github.com/morrisclay/scraps-cli/internal/model"
 )
 
 func newClaimCmd() *cobra.Command {

@@ -1,4 +1,4 @@
-module github.com/scraps-sh/scraps-cli
+module github.com/morrisclay/scraps-cli
 
 go 1.22
 

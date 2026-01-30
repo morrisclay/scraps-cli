@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/scraps-sh/scraps-cli/internal/config"
-	"github.com/scraps-sh/scraps-cli/internal/model"
+	"github.com/morrisclay/scraps-cli/internal/config"
+	"github.com/morrisclay/scraps-cli/internal/model"
 )
 
 // Client is the HTTP client for the scraps API.
