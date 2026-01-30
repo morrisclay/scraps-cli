@@ -18,9 +18,18 @@ func newCloneCmd() *cobra.Command {
 	var urlOnly bool
 
 	cmd := &cobra.Command{
-		Use:   "clone <store/repo> [directory]",
-		Short: "Clone a repository",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:     "clone <store/repo> [directory]",
+		Short:   "Clone a repository",
+		Example: "  scraps clone mystore/myrepo\n  scraps clone mystore/myrepo ./local-dir",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps clone <store/repo> [directory]\n\nExample: scraps clone mystore/myrepo")
+			}
+			if len(args) > 2 {
+				return fmt.Errorf("too many arguments\n\nUsage: scraps clone <store/repo> [directory]")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, err := parseStoreRepo(args[0])
 			if err != nil {

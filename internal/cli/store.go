@@ -149,9 +149,15 @@ func newStoreCreateCmd() *cobra.Command {
 
 func newStoreShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <slug>",
-		Short: "Show store details",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <slug>",
+		Short:   "Show store details",
+		Example: "  scraps store show mystore",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("store slug required\n\nUsage: scraps store show <slug>\n\nExample: scraps store show mystore")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := api.NewClientFromConfig("")
 			if err != nil {
@@ -181,9 +187,15 @@ func newStoreDeleteCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "delete <slug>",
-		Short: "Delete a store and all its repositories",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <slug>",
+		Short:   "Delete a store and all its repositories",
+		Example: "  scraps store delete mystore",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("store slug required\n\nUsage: scraps store delete <slug>\n\nExample: scraps store delete mystore")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			slug := args[0]
 
@@ -239,9 +251,15 @@ func newStoreMembersCmd() *cobra.Command {
 
 func newStoreMembersListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list <store>",
-		Short: "List members of a store",
-		Args:  cobra.ExactArgs(1),
+		Use:     "list <store>",
+		Short:   "List members of a store",
+		Example: "  scraps store members list mystore",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("store slug required\n\nUsage: scraps store members list <store>")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := api.NewClientFromConfig("")
 			if err != nil {
@@ -290,9 +308,15 @@ func newStoreMembersAddCmd() *cobra.Command {
 	var role string
 
 	cmd := &cobra.Command{
-		Use:   "add <store> <username>",
-		Short: "Add a member to a store",
-		Args:  cobra.ExactArgs(2),
+		Use:     "add <store> <username>",
+		Short:   "Add a member to a store",
+		Example: "  scraps store members add mystore johndoe --role member",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("store and username required\n\nUsage: scraps store members add <store> <username>\n\nExample: scraps store members add mystore johndoe")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, username := args[0], args[1]
 
@@ -344,9 +368,15 @@ func newStoreMembersUpdateCmd() *cobra.Command {
 	var role string
 
 	cmd := &cobra.Command{
-		Use:   "update <store> <username>",
-		Short: "Update a member's role",
-		Args:  cobra.ExactArgs(2),
+		Use:     "update <store> <username>",
+		Short:   "Update a member's role",
+		Example: "  scraps store members update mystore johndoe --role admin",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("store and username required\n\nUsage: scraps store members update <store> <username> --role <role>\n\nExample: scraps store members update mystore johndoe --role admin")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, username := args[0], args[1]
 
@@ -395,9 +425,15 @@ func newStoreMembersRemoveCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "remove <store> <username>",
-		Short: "Remove a member from a store",
-		Args:  cobra.ExactArgs(2),
+		Use:     "remove <store> <username>",
+		Short:   "Remove a member from a store",
+		Example: "  scraps store members remove mystore johndoe",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("store and username required\n\nUsage: scraps store members remove <store> <username>\n\nExample: scraps store members remove mystore johndoe")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, username := args[0], args[1]
 

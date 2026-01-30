@@ -18,7 +18,14 @@ func newClaimCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "claim <store/repo:branch> <patterns...>",
 		Short: "Claim file patterns for exclusive access",
-		Args:  cobra.MinimumNArgs(2),
+		Example: `  scraps claim mystore/myrepo:main "*.go"
+  scraps claim mystore/myrepo:main "src/*.ts" "lib/*.ts" --message "Working on frontend"`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("missing arguments\n\nUsage: scraps claim <store/repo:branch> <patterns...>\n\nExample: scraps claim mystore/myrepo:main \"*.go\"")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, branch, err := parseStoreRepoBranch(args[0])
 			if err != nil {
@@ -101,7 +108,13 @@ func newReleaseCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "release <store/repo:branch> <patterns...>",
 		Short: "Release claimed file patterns",
-		Args:  cobra.MinimumNArgs(2),
+		Example: `  scraps release mystore/myrepo:main "*.go" --agent-id cli-abc123`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("missing arguments\n\nUsage: scraps release <store/repo:branch> <patterns...> --agent-id <id>\n\nExample: scraps release mystore/myrepo:main \"*.go\" --agent-id cli-abc123")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, branch, err := parseStoreRepoBranch(args[0])
 			if err != nil {

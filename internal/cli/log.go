@@ -13,9 +13,15 @@ func newLogCmd() *cobra.Command {
 	var limit int
 
 	cmd := &cobra.Command{
-		Use:   "log <store/repo:branch>",
-		Short: "Show commit history",
-		Args:  cobra.ExactArgs(1),
+		Use:     "log <store/repo[:branch]>",
+		Short:   "Show commit history",
+		Example: "  scraps log mystore/myrepo\n  scraps log mystore/myrepo:main -n 20",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps log <store/repo[:branch]>\n\nExample: scraps log mystore/myrepo")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, branch, err := parseStoreRepoBranch(args[0])
 			if err != nil {

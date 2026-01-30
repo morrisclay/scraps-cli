@@ -151,9 +151,15 @@ func newRepoListCmd() *cobra.Command {
 
 func newRepoCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "create <store/repo>",
-		Short: "Create a new repository",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <store/repo>",
+		Short:   "Create a new repository",
+		Example: "  scraps repo create mystore/myrepo",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps repo create <store/repo>\n\nExample: scraps repo create mystore/myrepo")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, name, err := parseStoreRepo(args[0])
 			if err != nil {
@@ -183,9 +189,15 @@ func newRepoCreateCmd() *cobra.Command {
 
 func newRepoShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "show <store/repo>",
-		Short: "Show repository details",
-		Args:  cobra.ExactArgs(1),
+		Use:     "show <store/repo>",
+		Short:   "Show repository details",
+		Example: "  scraps repo show mystore/myrepo",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps repo show <store/repo>\n\nExample: scraps repo show mystore/myrepo")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, name, err := parseStoreRepo(args[0])
 			if err != nil {
@@ -221,9 +233,15 @@ func newRepoDeleteCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "delete <store/repo>",
-		Short: "Delete a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:     "delete <store/repo>",
+		Short:   "Delete a repository",
+		Example: "  scraps repo delete mystore/myrepo",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps repo delete <store/repo>\n\nExample: scraps repo delete mystore/myrepo")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, name, err := parseStoreRepo(args[0])
 			if err != nil {
@@ -281,9 +299,15 @@ func newRepoCollaboratorsCmd() *cobra.Command {
 
 func newRepoCollaboratorsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list <store/repo>",
-		Short: "List collaborators of a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:     "list <store/repo>",
+		Short:   "List collaborators of a repository",
+		Example: "  scraps repo collaborators list mystore/myrepo",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps repo collaborators list <store/repo>")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, name, err := parseStoreRepo(args[0])
 			if err != nil {
@@ -337,9 +361,15 @@ func newRepoCollaboratorsAddCmd() *cobra.Command {
 	var role string
 
 	cmd := &cobra.Command{
-		Use:   "add <store/repo> <username>",
-		Short: "Add a collaborator to a repository",
-		Args:  cobra.ExactArgs(2),
+		Use:     "add <store/repo> <username>",
+		Short:   "Add a collaborator to a repository",
+		Example: "  scraps repo collaborators add mystore/myrepo johndoe --role write",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("repository and username required\n\nUsage: scraps repo collaborators add <store/repo> <username>\n\nExample: scraps repo collaborators add mystore/myrepo johndoe")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, name, err := parseStoreRepo(args[0])
 			if err != nil {
@@ -378,9 +408,15 @@ func newRepoCollaboratorsRemoveCmd() *cobra.Command {
 	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "remove <store/repo> <username>",
-		Short: "Remove a collaborator from a repository",
-		Args:  cobra.ExactArgs(2),
+		Use:     "remove <store/repo> <username>",
+		Short:   "Remove a collaborator from a repository",
+		Example: "  scraps repo collaborators remove mystore/myrepo johndoe",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 2 {
+				return fmt.Errorf("repository and username required\n\nUsage: scraps repo collaborators remove <store/repo> <username>\n\nExample: scraps repo collaborators remove mystore/myrepo johndoe")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, name, err := parseStoreRepo(args[0])
 			if err != nil {

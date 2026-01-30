@@ -542,9 +542,15 @@ func newTokenRevokeCmd() *cobra.Command {
 	var isToken, force bool
 
 	cmd := &cobra.Command{
-		Use:   "revoke <id>",
-		Short: "Revoke an API key or scoped token",
-		Args:  cobra.ExactArgs(1),
+		Use:     "revoke <id>",
+		Short:   "Revoke an API key or scoped token",
+		Example: "  scraps token revoke abc123\n  scraps token revoke abc123 --token  # for scoped tokens",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("token ID required\n\nUsage: scraps token revoke <id>\n\nExample: scraps token revoke abc123")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 

@@ -25,9 +25,15 @@ func newKeyResetRequestCmd() *cobra.Command {
 	var host string
 
 	cmd := &cobra.Command{
-		Use:   "reset-request <email>",
-		Short: "Request an API key reset email",
-		Args:  cobra.ExactArgs(1),
+		Use:     "reset-request <email>",
+		Short:   "Request an API key reset email",
+		Example: "  scraps key reset-request user@example.com",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("email address required\n\nUsage: scraps key reset-request <email>\n\nExample: scraps key reset-request user@example.com")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			email := args[0]
 
@@ -55,9 +61,15 @@ func newKeyResetConfirmCmd() *cobra.Command {
 	var noLogin bool
 
 	cmd := &cobra.Command{
-		Use:   "reset-confirm <token>",
-		Short: "Confirm API key reset with token from email",
-		Args:  cobra.ExactArgs(1),
+		Use:     "reset-confirm <token>",
+		Short:   "Confirm API key reset with token from email",
+		Example: "  scraps key reset-confirm abc123token",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("reset token required\n\nUsage: scraps key reset-confirm <token>\n\nThe token is sent to your email after running 'scraps key reset-request'")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			token := args[0]
 

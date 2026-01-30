@@ -42,7 +42,12 @@ Examples:
 
   # Combine branch and path filters
   scraps watch mystore/myrepo:main --path "src/**"`,
-		Args: cobra.ExactArgs(1),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps watch <store/repo[:branch]>\n\nExample: scraps watch mystore/myrepo")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, parsedBranch, err := parseStoreRepoBranch(args[0])
 			if err != nil {

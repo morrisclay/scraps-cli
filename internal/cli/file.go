@@ -32,9 +32,18 @@ func newFileCmd() *cobra.Command {
 
 func newFileTreeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "tree <store/repo:branch> [path]",
-		Short: "List files in a repository",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:     "tree <store/repo[:branch]> [path]",
+		Short:   "List files in a repository",
+		Example: "  scraps file tree mystore/myrepo\n  scraps file tree mystore/myrepo:main src/",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("repository reference required\n\nUsage: scraps file tree <store/repo[:branch]> [path]\n\nExample: scraps file tree mystore/myrepo")
+			}
+			if len(args) > 2 {
+				return fmt.Errorf("too many arguments\n\nUsage: scraps file tree <store/repo[:branch]> [path]")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, branch, _, err := parseStoreRepoBranchPath(args[0] + ":")
 			if err != nil {
@@ -259,9 +268,15 @@ func runTreeBrowser(client *api.Client, store, repo, branch, path string) error 
 
 func newFileReadCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "read <store/repo:branch:path>",
-		Short: "Read file contents",
-		Args:  cobra.ExactArgs(1),
+		Use:     "read <store/repo:branch:path>",
+		Short:   "Read file contents",
+		Example: "  scraps file read mystore/myrepo:main:README.md\n  scraps file read mystore/myrepo:main:src/index.ts",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("file reference required\n\nUsage: scraps file read <store/repo:branch:path>\n\nExample: scraps file read mystore/myrepo:main:README.md")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, branch, path, err := parseStoreRepoBranchPath(args[0])
 			if err != nil {
