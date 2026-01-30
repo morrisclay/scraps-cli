@@ -672,8 +672,31 @@ func (c *Client) BuildClaimsWebSocketURL(store, repo, branch string) string {
 		protocol, host, url.PathEscape(store), url.PathEscape(repo), url.PathEscape(branch), url.QueryEscape(c.apiKey))
 }
 
+// StreamOptions configures the event stream URL.
+type StreamOptions struct {
+	Branch string
+	Path   string
+}
+
 // BuildStreamURL returns the URL for the event streaming endpoint.
-func (c *Client) BuildStreamURL(store, repo string) string {
-	return fmt.Sprintf("%s/api/v1/stores/%s/repos/%s/streams/events/live",
+func (c *Client) BuildStreamURL(store, repo string, opts *StreamOptions) string {
+	baseURL := fmt.Sprintf("%s/api/v1/stores/%s/repos/%s/streams/events/live",
 		c.host, url.PathEscape(store), url.PathEscape(repo))
+
+	if opts == nil {
+		return baseURL
+	}
+
+	params := url.Values{}
+	if opts.Branch != "" {
+		params.Set("branch", opts.Branch)
+	}
+	if opts.Path != "" {
+		params.Set("path", opts.Path)
+	}
+
+	if len(params) > 0 {
+		return baseURL + "?" + params.Encode()
+	}
+	return baseURL
 }

@@ -19,13 +19,30 @@ import (
 )
 
 func newWatchCmd() *cobra.Command {
-	var branch, lastEvent string
+	var branch, lastEvent, path string
 	var claims bool
 
 	cmd := &cobra.Command{
 		Use:   "watch <store/repo[:branch]>",
 		Short: "Watch repository events in real-time",
-		Args:  cobra.ExactArgs(1),
+		Long: `Watch repository events in real-time.
+
+Examples:
+  # Watch all events
+  scraps watch mystore/myrepo
+
+  # Watch specific branch
+  scraps watch mystore/myrepo:main
+
+  # Watch specific file path
+  scraps watch mystore/myrepo --path src/auth.ts
+
+  # Watch files matching a glob pattern
+  scraps watch mystore/myrepo --path "src/**/*.ts"
+
+  # Combine branch and path filters
+  scraps watch mystore/myrepo:main --path "src/**"`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, repo, parsedBranch, err := parseStoreRepoBranch(args[0])
 			if err != nil {
@@ -43,23 +60,25 @@ func newWatchCmd() *cobra.Command {
 
 			// Interactive TUI mode
 			if isInteractive() && config.GetOutputFormat() != "json" {
-				return runWatchTUI(client, store, repo, branch, claims)
+				return runWatchTUI(client, store, repo, branch, path, claims)
 			}
 
 			// Non-interactive: just stream to stdout
-			return runWatchNonInteractive(client, store, repo, branch)
+			return runWatchNonInteractive(client, store, repo, branch, path)
 		},
 	}
 
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Filter to specific branch")
+	cmd.Flags().StringVarP(&path, "path", "p", "", "Filter to specific path or glob pattern (e.g., \"src/**/*.ts\")")
 	cmd.Flags().StringVar(&lastEvent, "last-event", "", "Resume from event ID")
 	cmd.Flags().BoolVar(&claims, "claims", false, "Show claim/release activity")
 
 	return cmd
 }
 
-func runWatchNonInteractive(client *api.Client, store, repo, branch string) error {
-	streamURL := client.BuildStreamURL(store, repo)
+func runWatchNonInteractive(client *api.Client, store, repo, branch, path string) error {
+	opts := &api.StreamOptions{Branch: branch, Path: path}
+	streamURL := client.BuildStreamURL(store, repo, opts)
 	streamClient := stream.NewClient(streamURL, client.APIKey())
 
 	streamClient.OnMessage = func(data []byte) {
@@ -90,6 +109,9 @@ func runWatchNonInteractive(client *api.Client, store, repo, branch string) erro
 	if branch != "" {
 		fmt.Printf("Branch: %s\n", branch)
 	}
+	if path != "" {
+		fmt.Printf("Path: %s\n", path)
+	}
 	fmt.Println("Press Ctrl+C to stop")
 	fmt.Println()
 
@@ -105,6 +127,7 @@ type watchModel struct {
 	store        string
 	repo         string
 	branch       string
+	path         string
 	claims       bool
 	connected    bool
 	events       []watchEvent
@@ -130,12 +153,13 @@ type streamMessageMsg struct{ data []byte }
 type streamErrorMsg struct{ err error }
 type streamClosedMsg struct{}
 
-func newWatchModel(client *api.Client, store, repo, branch string, claims bool) watchModel {
+func newWatchModel(client *api.Client, store, repo, branch, path string, claims bool) watchModel {
 	return watchModel{
 		client:     client,
 		store:      store,
 		repo:       repo,
 		branch:     branch,
+		path:       path,
 		claims:     claims,
 		events:     make([]watchEvent, 0),
 		showClaims: true,
@@ -148,7 +172,8 @@ func (m watchModel) Init() tea.Cmd {
 
 func (m *watchModel) connect() tea.Cmd {
 	return func() tea.Msg {
-		streamURL := m.client.BuildStreamURL(m.store, m.repo)
+		opts := &api.StreamOptions{Branch: m.branch, Path: m.path}
+		streamURL := m.client.BuildStreamURL(m.store, m.repo, opts)
 		m.streamClient = stream.NewClient(streamURL, m.client.APIKey())
 
 		if err := m.streamClient.Connect(); err != nil {
@@ -401,6 +426,9 @@ func (m watchModel) View() string {
 	if m.branch != "" {
 		title += ":" + m.branch
 	}
+	if m.path != "" {
+		title += " [" + m.path + "]"
+	}
 	s.WriteString(tui.TitleStyle.Render(title))
 
 	// Connection status
@@ -439,8 +467,8 @@ func (m watchModel) View() string {
 	return s.String()
 }
 
-func runWatchTUI(client *api.Client, store, repo, branch string, claims bool) error {
-	m := newWatchModel(client, store, repo, branch, claims)
+func runWatchTUI(client *api.Client, store, repo, branch, path string, claims bool) error {
+	m := newWatchModel(client, store, repo, branch, path, claims)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
