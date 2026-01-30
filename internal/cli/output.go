@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/morrisclay/scraps-cli/internal/config"
+	"github.com/morrisclay/scraps-cli/internal/tui/components"
 	"golang.org/x/term"
 )
 
@@ -126,4 +128,67 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// outputInteractiveTable outputs data as an interactive table with selection.
+// Returns the selected row, or nil if cancelled.
+func outputInteractiveTable(title string, headers []string, rows [][]string) (table.Row, error) {
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	// Calculate column widths
+	widths := make([]int, len(headers))
+	for i, h := range headers {
+		widths[i] = len(h)
+	}
+	for _, row := range rows {
+		for i, cell := range row {
+			if i < len(widths) && len(cell) > widths[i] {
+				widths[i] = len(cell)
+			}
+		}
+	}
+
+	// Cap column widths
+	maxWidth := 40
+	for i := range widths {
+		if widths[i] > maxWidth {
+			widths[i] = maxWidth
+		}
+	}
+
+	// Create table columns
+	columns := make([]components.TableColumn, len(headers))
+	for i, h := range headers {
+		columns[i] = components.TableColumn{
+			Title: h,
+			Width: widths[i],
+		}
+	}
+
+	// Convert rows to table.Row
+	tableRows := make([]table.Row, len(rows))
+	for i, row := range rows {
+		tableRows[i] = row
+	}
+
+	return components.RunTableInline(title, columns, tableRows)
+}
+
+// outputWithInteractiveTable outputs data with optional interactive table.
+// If interactive and not JSON format, shows interactive table; otherwise shows static table.
+func outputWithInteractiveTable(title string, data any, headers []string, rows [][]string) (table.Row, error) {
+	format := config.GetOutputFormat()
+	if format == "json" {
+		outputJSON(data)
+		return nil, nil
+	}
+
+	if isInteractive() && len(rows) > 0 {
+		return outputInteractiveTable(title, headers, rows)
+	}
+
+	outputTable(headers, rows)
+	return nil, nil
 }

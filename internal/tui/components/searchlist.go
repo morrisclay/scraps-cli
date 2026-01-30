@@ -1,10 +1,12 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/paginator"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -42,6 +44,7 @@ func (i SearchListItem) Value() any { return i.value }
 // SearchListModel is a searchable list component.
 type SearchListModel struct {
 	list       list.Model
+	paginator  paginator.Model
 	filterMode bool
 	filter     textinput.Model
 	title      string
@@ -49,8 +52,11 @@ type SearchListModel struct {
 	selected   *SearchListItem
 	done       bool
 	cancelled  bool
+	showHelp   bool
 	width      int
 	height     int
+	usePaging  bool
+	pageSize   int
 }
 
 // SearchListSelectedMsg is sent when an item is selected.
@@ -90,14 +96,38 @@ func NewSearchList(title string, items []SearchListItem) SearchListModel {
 	ti.PromptStyle = tui.PromptStyle
 	ti.TextStyle = lipgloss.NewStyle()
 
-	return SearchListModel{
-		list:   l,
-		filter: ti,
-		title:  title,
-		items:  items,
-		width:  40,
-		height: 15,
+	// Create paginator for large lists
+	pageSize := 20
+	usePaging := len(items) > 100
+	p := paginator.New()
+	p.Type = paginator.Dots
+	p.PerPage = pageSize
+	p.ActiveDot = lipgloss.NewStyle().Foreground(tui.ColorPrimary).Render("•")
+	p.InactiveDot = lipgloss.NewStyle().Foreground(tui.ColorMuted).Render("•")
+	if usePaging {
+		p.SetTotalPages(len(items))
 	}
+
+	return SearchListModel{
+		list:      l,
+		paginator: p,
+		filter:    ti,
+		title:     title,
+		items:     items,
+		width:     40,
+		height:    15,
+		usePaging: usePaging,
+		pageSize:  pageSize,
+	}
+}
+
+// WithPaging enables pagination with the specified page size.
+func (m SearchListModel) WithPaging(pageSize int) SearchListModel {
+	m.usePaging = true
+	m.pageSize = pageSize
+	m.paginator.PerPage = pageSize
+	m.paginator.SetTotalPages(len(m.items))
+	return m
 }
 
 // Init implements tea.Model.
@@ -134,6 +164,10 @@ func (m SearchListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch {
+		case key.Matches(msg, key.NewBinding(key.WithKeys("?"))):
+			m.showHelp = !m.showHelp
+			return m, nil
+
 		case key.Matches(msg, key.NewBinding(key.WithKeys("/"))):
 			m.filterMode = true
 			m.filter.Focus()
@@ -157,12 +191,30 @@ func (m SearchListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelled = true
 			m.done = true
 			return m, tea.Quit
+
+		// Page navigation for large lists
+		case key.Matches(msg, key.NewBinding(key.WithKeys("pgdown", "ctrl+f"))):
+			if m.usePaging {
+				m.paginator.NextPage()
+			}
+
+		case key.Matches(msg, key.NewBinding(key.WithKeys("pgup", "ctrl+b"))):
+			if m.usePaging {
+				m.paginator.PrevPage()
+			}
 		}
 	}
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	cmds = append(cmds, cmd)
+
+	// Update paginator
+	if m.usePaging {
+		var pCmd tea.Cmd
+		m.paginator, pCmd = m.paginator.Update(msg)
+		cmds = append(cmds, pCmd)
+	}
 
 	return m, tea.Batch(cmds...)
 }
@@ -203,6 +255,24 @@ func (m SearchListModel) View() string {
 	}
 
 	s.WriteString(m.list.View())
+
+	// Show paginator for large lists
+	if m.usePaging && len(m.items) > m.pageSize {
+		s.WriteString("\n")
+		s.WriteString(fmt.Sprintf("  Page %d/%d  ", m.paginator.Page+1, m.paginator.TotalPages))
+		s.WriteString(m.paginator.View())
+		s.WriteString("\n")
+	}
+
+	// Show help
+	if m.showHelp {
+		s.WriteString("\n")
+		s.WriteString(tui.HelpStyle.Render("↑/k up  ↓/j down  / filter  enter select  q quit"))
+		if m.usePaging {
+			s.WriteString("\n")
+			s.WriteString(tui.HelpStyle.Render("pgup/ctrl+b prev page  pgdown/ctrl+f next page"))
+		}
+	}
 
 	return s.String()
 }

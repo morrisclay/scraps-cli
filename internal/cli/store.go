@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/spf13/cobra"
 
 	"github.com/morrisclay/scraps-cli/internal/api"
@@ -26,6 +27,8 @@ func newStoreCmd() *cobra.Command {
 }
 
 func newStoreListCmd() *cobra.Command {
+	var useTable bool
+
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List stores you are a member of",
@@ -48,38 +51,62 @@ func newStoreListCmd() *cobra.Command {
 			if config.GetOutputFormat() == "json" {
 				outputJSON(stores)
 			} else {
-				// Interactive mode - use searchable list
-				if isInteractive() {
-					items := make([]components.SearchListItem, len(stores))
-					for i, s := range stores {
-						items[i] = components.NewSearchListItem(
-							s.Slug,
-							fmt.Sprintf("Role: %s • Created: %s", s.Role, formatDate(s.CreatedAt)),
-							s,
-						)
-					}
-
-					selected, err := components.RunSearchList("Select Store", items)
-					if err != nil {
-						return err
-					}
-					if selected != nil {
-						fmt.Printf("Selected: %s\n", selected.Title())
-					}
-					return nil
-				}
-
-				// Table output
 				headers := []string{"SLUG", "ROLE", "CREATED"}
 				rows := make([][]string, len(stores))
 				for i, s := range stores {
 					rows[i] = []string{s.Slug, s.Role, formatDate(s.CreatedAt)}
 				}
+
+				// Interactive mode - use table or searchable list
+				if isInteractive() {
+					if useTable {
+						// Use interactive table
+						columns := []components.TableColumn{
+							{Title: "SLUG", Width: 20},
+							{Title: "ROLE", Width: 10},
+							{Title: "CREATED", Width: 15},
+						}
+						tableRows := make([]table.Row, len(rows))
+						for i, row := range rows {
+							tableRows[i] = row
+						}
+						selected, err := components.RunTableInline("Stores", columns, tableRows)
+						if err != nil {
+							return err
+						}
+						if selected != nil {
+							fmt.Printf("\nSelected: %s\n", selected[0])
+						}
+					} else {
+						// Use searchable list
+						items := make([]components.SearchListItem, len(stores))
+						for i, s := range stores {
+							items[i] = components.NewSearchListItem(
+								s.Slug,
+								fmt.Sprintf("Role: %s • Created: %s", s.Role, formatDate(s.CreatedAt)),
+								s,
+							)
+						}
+
+						selected, err := components.RunSearchList("Select Store", items)
+						if err != nil {
+							return err
+						}
+						if selected != nil {
+							fmt.Printf("Selected: %s\n", selected.Title())
+						}
+					}
+					return nil
+				}
+
+				// Non-interactive table output
 				outputTable(headers, rows)
 			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&useTable, "table", false, "Use interactive table view instead of list")
 	return cmd
 }
 
@@ -229,7 +256,19 @@ func newStoreMembersListCmd() *cobra.Command {
 				for i, m := range members {
 					rows[i] = []string{m.Username, m.Role, formatDate(m.CreatedAt)}
 				}
-				outputTable(headers, rows)
+
+				// Use interactive table if available
+				if isInteractive() {
+					selected, err := outputInteractiveTable("Store Members", headers, rows)
+					if err != nil {
+						return err
+					}
+					if selected != nil {
+						fmt.Printf("\nSelected: %s (%s)\n", selected[0], selected[1])
+					}
+				} else {
+					outputTable(headers, rows)
+				}
 			}
 			return nil
 		},

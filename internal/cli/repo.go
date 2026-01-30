@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/spf13/cobra"
 
 	"github.com/morrisclay/scraps-cli/internal/api"
@@ -26,6 +27,8 @@ func newRepoCmd() *cobra.Command {
 }
 
 func newRepoListCmd() *cobra.Command {
+	var useTable bool
+
 	cmd := &cobra.Command{
 		Use:   "list [store]",
 		Short: "List repositories",
@@ -88,38 +91,61 @@ func newRepoListCmd() *cobra.Command {
 			if config.GetOutputFormat() == "json" {
 				outputJSON(repos)
 			} else {
-				// Interactive mode - use searchable list
-				if isInteractive() && len(args) == 0 {
-					items := make([]components.SearchListItem, len(repos))
-					for i, r := range repos {
-						items[i] = components.NewSearchListItem(
-							formatStoreRepo(r.Store, r.Name),
-							fmt.Sprintf("Created: %s", formatDate(r.CreatedAt)),
-							r,
-						)
-					}
-
-					selected, err := components.RunSearchList("Select Repository", items)
-					if err != nil {
-						return err
-					}
-					if selected != nil {
-						fmt.Printf("Selected: %s\n", selected.Title())
-					}
-					return nil
-				}
-
-				// Table output
 				headers := []string{"REPOSITORY", "CREATED"}
 				rows := make([][]string, len(repos))
 				for i, r := range repos {
 					rows[i] = []string{formatStoreRepo(r.Store, r.Name), formatDate(r.CreatedAt)}
 				}
+
+				// Interactive mode - use table or searchable list
+				if isInteractive() {
+					if useTable || len(args) > 0 {
+						// Use interactive table for specific store or when flag set
+						columns := []components.TableColumn{
+							{Title: "REPOSITORY", Width: 30},
+							{Title: "CREATED", Width: 15},
+						}
+						tableRows := make([]table.Row, len(rows))
+						for i, row := range rows {
+							tableRows[i] = row
+						}
+						selected, err := components.RunTableInline("Repositories", columns, tableRows)
+						if err != nil {
+							return err
+						}
+						if selected != nil {
+							fmt.Printf("\nSelected: %s\n", selected[0])
+						}
+					} else {
+						// Use searchable list for browsing all repos
+						items := make([]components.SearchListItem, len(repos))
+						for i, r := range repos {
+							items[i] = components.NewSearchListItem(
+								formatStoreRepo(r.Store, r.Name),
+								fmt.Sprintf("Created: %s", formatDate(r.CreatedAt)),
+								r,
+							)
+						}
+
+						selected, err := components.RunSearchList("Select Repository", items)
+						if err != nil {
+							return err
+						}
+						if selected != nil {
+							fmt.Printf("Selected: %s\n", selected.Title())
+						}
+					}
+					return nil
+				}
+
+				// Non-interactive table output
 				outputTable(headers, rows)
 			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&useTable, "table", false, "Use interactive table view instead of list")
 	return cmd
 }
 
@@ -287,7 +313,19 @@ func newRepoCollaboratorsListCmd() *cobra.Command {
 				for i, c := range collabs {
 					rows[i] = []string{c.Username, c.Role, formatDate(c.CreatedAt)}
 				}
-				outputTable(headers, rows)
+
+				// Use interactive table if available
+				if isInteractive() {
+					selected, err := outputInteractiveTable("Collaborators", headers, rows)
+					if err != nil {
+						return err
+					}
+					if selected != nil {
+						fmt.Printf("\nSelected: %s (%s)\n", selected[0], selected[1])
+					}
+				} else {
+					outputTable(headers, rows)
+				}
 			}
 			return nil
 		},

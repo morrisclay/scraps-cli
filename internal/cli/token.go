@@ -461,7 +461,25 @@ func newTokenListCmd() *cobra.Command {
 							lastUsed,
 						}
 					}
-					outputTable(headers, rows)
+
+					// Use interactive table if available
+					if isInteractive() {
+						selected, err := outputInteractiveTable("API Keys", headers, rows)
+						if err != nil {
+							return err
+						}
+						if selected != nil {
+							// Copy full ID to show user what was selected
+							for _, k := range keys {
+								if truncate(k.ID, 12) == selected[0] {
+									fmt.Printf("\nSelected: %s (ID: %s)\n", k.Label, k.ID)
+									break
+								}
+							}
+						}
+					} else {
+						outputTable(headers, rows)
+					}
 					fmt.Println()
 				}
 			}
@@ -489,7 +507,24 @@ func newTokenListCmd() *cobra.Command {
 							expires,
 						}
 					}
-					outputTable(headers, rows)
+
+					// Use interactive table if available
+					if isInteractive() {
+						selected, err := outputInteractiveTable("Scoped Tokens", headers, rows)
+						if err != nil {
+							return err
+						}
+						if selected != nil {
+							for _, t := range tokens {
+								if truncate(t.ID, 12) == selected[0] {
+									fmt.Printf("\nSelected: %s (ID: %s)\n", t.Label, t.ID)
+									break
+								}
+							}
+						}
+					} else {
+						outputTable(headers, rows)
+					}
 				}
 			}
 

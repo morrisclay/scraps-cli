@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -399,3 +400,135 @@ func (s *ItemSelectStep) SelectedItem() *SearchListItem {
 	}
 	return nil
 }
+
+// --- Textarea Step ---
+
+// TextareaStep is a wizard step with multi-line text input.
+type TextareaStep struct {
+	title       string
+	prompt      string
+	textarea    textarea.Model
+	complete    bool
+	value       string
+	charLimit   int
+	lineLimit   int
+}
+
+// NewTextareaStep creates a new textarea step.
+func NewTextareaStep(title, prompt, placeholder string) *TextareaStep {
+	ta := textarea.New()
+	ta.Placeholder = placeholder
+	ta.CharLimit = 1000
+	ta.SetWidth(40)
+	ta.SetHeight(5)
+
+	// Style the textarea
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(tui.ColorMuted)
+	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(tui.ColorPrimary)
+	ta.FocusedStyle.Text = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF"))
+	ta.FocusedStyle.Base = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(tui.ColorPrimary).
+		Padding(0, 1)
+
+	ta.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	ta.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(tui.ColorMuted)
+	ta.BlurredStyle.Prompt = lipgloss.NewStyle().Foreground(tui.ColorMuted)
+	ta.BlurredStyle.Text = lipgloss.NewStyle().Foreground(tui.ColorMuted)
+	ta.BlurredStyle.Base = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(tui.ColorBorder).
+		Padding(0, 1)
+
+	return &TextareaStep{
+		title:     title,
+		prompt:    prompt,
+		textarea:  ta,
+		charLimit: 1000,
+	}
+}
+
+// WithCharLimit sets the character limit for the textarea.
+func (s *TextareaStep) WithCharLimit(limit int) *TextareaStep {
+	s.charLimit = limit
+	s.textarea.CharLimit = limit
+	return s
+}
+
+// WithLineLimit sets the line limit for the textarea.
+func (s *TextareaStep) WithLineLimit(limit int) *TextareaStep {
+	s.lineLimit = limit
+	return s
+}
+
+// WithSize sets the textarea dimensions.
+func (s *TextareaStep) WithSize(width, height int) *TextareaStep {
+	s.textarea.SetWidth(width)
+	s.textarea.SetHeight(height)
+	return s
+}
+
+// Title implements WizardStep.
+func (s *TextareaStep) Title() string { return s.title }
+
+// Init implements WizardStep.
+func (s *TextareaStep) Init() tea.Cmd {
+	s.textarea.Focus()
+	return textarea.Blink
+}
+
+// Update implements WizardStep.
+func (s *TextareaStep) Update(msg tea.Msg) (WizardStep, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		// Ctrl+D to submit (allows empty content)
+		if msg.String() == "ctrl+d" {
+			s.complete = true
+			s.value = s.textarea.Value()
+			return s, nil
+		}
+
+		// Check line limit before allowing new lines
+		if s.lineLimit > 0 && msg.String() == "enter" {
+			lines := strings.Count(s.textarea.Value(), "\n") + 1
+			if lines >= s.lineLimit {
+				return s, nil
+			}
+		}
+	}
+
+	var cmd tea.Cmd
+	s.textarea, cmd = s.textarea.Update(msg)
+	return s, cmd
+}
+
+// View implements WizardStep.
+func (s *TextareaStep) View() string {
+	var b strings.Builder
+	b.WriteString(s.prompt)
+	b.WriteString("\n\n")
+	b.WriteString(s.textarea.View())
+	b.WriteString("\n")
+
+	// Character count
+	charCount := len(s.textarea.Value())
+	countStyle := tui.MutedStyle
+	if charCount > s.charLimit*9/10 {
+		countStyle = tui.WarningStyle
+	}
+	if charCount >= s.charLimit {
+		countStyle = tui.ErrorStyle
+	}
+	b.WriteString(countStyle.Render(fmt.Sprintf("%d/%d", charCount, s.charLimit)))
+	b.WriteString("\n\n")
+	b.WriteString(tui.MutedStyle.Render("ctrl+d to continue"))
+
+	return b.String()
+}
+
+// IsComplete implements WizardStep.
+func (s *TextareaStep) IsComplete() bool { return s.complete }
+
+// Value implements WizardStep.
+func (s *TextareaStep) Value() any { return s.value }

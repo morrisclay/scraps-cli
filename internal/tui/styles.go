@@ -117,6 +117,40 @@ var (
 	// Spinner style
 	SpinnerStyle = lipgloss.NewStyle().
 			Foreground(ColorPrimary)
+
+	// Table header style
+	TableHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(ColorPrimary).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(ColorBorder).
+				BorderBottom(true)
+
+	// Table cell style
+	TableCellStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF"))
+
+	// Table selected row style
+	TableSelectedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#FFFFFF")).
+				Background(ColorPrimary).
+				Bold(true)
+
+	// Textarea style
+	TextareaStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(ColorPrimary).
+			Padding(0, 1)
+
+	// Paginator active dot
+	PaginatorActiveDot = lipgloss.NewStyle().
+				Foreground(ColorPrimary).
+				Render("•")
+
+	// Paginator inactive dot
+	PaginatorInactiveDot = lipgloss.NewStyle().
+				Foreground(ColorMuted).
+				Render("•")
 )
 
 // WizardStepStyle returns style for wizard step indicators.
