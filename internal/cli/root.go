@@ -6,8 +6,9 @@ import (
 	"os"
 	"sort"
 
-	"github.com/morrisclay/scraps-cli/pkg/version"
 	"github.com/spf13/cobra"
+
+	"github.com/morrisclay/scraps-cli/pkg/version"
 )
 
 // versionWithCheck returns version info and checks for updates.
@@ -27,6 +28,8 @@ func versionWithCheck() string {
 	return result
 }
 
+var outputFormat string
+
 var rootCmd = &cobra.Command{
 	Use:   "scraps",
 	Short: "Scraps CLI - Git-native context sharing for AI agents",
@@ -35,6 +38,12 @@ It provides stores, repositories, and coordination primitives
 for multi-agent collaboration.`,
 	Version:      version.Version,
 	SilenceUsage: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Override output format if flag is set
+		if outputFormat != "" {
+			os.Setenv("SCRAPS_OUTPUT_FORMAT", outputFormat)
+		}
+	},
 }
 
 
@@ -55,6 +64,9 @@ const (
 )
 
 func init() {
+	// Global flags
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "", "Output format (table, json)")
+
 	// Disable default completion command
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 

@@ -184,11 +184,25 @@ func (c *Client) GetRaw(path string) ([]byte, error) {
 
 // GetUser returns the current authenticated user.
 func (c *Client) GetUser() (*model.User, error) {
-	var user model.User
-	if err := c.Get("/api/v1/user", &user); err != nil {
+	data, err := c.request("GET", "/api/v1/user", nil)
+	if err != nil {
 		return nil, err
 	}
-	return &user, nil
+
+	// Try direct user object first
+	var user model.User
+	if err := json.Unmarshal(data, &user); err == nil && user.ID != "" {
+		return &user, nil
+	}
+
+	// Try wrapped format {"user": {...}}
+	var wrapper struct {
+		User model.User `json:"user"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	return &wrapper.User, nil
 }
 
 // Signup creates a new user account.
@@ -222,20 +236,49 @@ func (c *Client) ResetAPIKeyConfirm(token string) (*model.ResetConfirmResponse, 
 
 // ListStores returns all stores the user is a member of.
 func (c *Client) ListStores() ([]model.Store, error) {
-	var stores []model.Store
-	if err := c.Get("/api/v1/stores", &stores); err != nil {
+	// API may return {"stores": [...]} or just [...]
+	data, err := c.request("GET", "/api/v1/stores", nil)
+	if err != nil {
 		return nil, err
 	}
-	return stores, nil
+
+	// Try array first
+	var stores []model.Store
+	if err := json.Unmarshal(data, &stores); err == nil {
+		return stores, nil
+	}
+
+	// Try object with stores key
+	var wrapper struct {
+		Stores []model.Store `json:"stores"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.Stores, nil
 }
 
 // GetStore returns a store by slug.
 func (c *Client) GetStore(slug string) (*model.Store, error) {
-	var store model.Store
-	if err := c.Get("/api/v1/stores/"+url.PathEscape(slug), &store); err != nil {
+	data, err := c.request("GET", "/api/v1/stores/"+url.PathEscape(slug), nil)
+	if err != nil {
 		return nil, err
 	}
-	return &store, nil
+
+	// Try direct store object first
+	var store model.Store
+	if err := json.Unmarshal(data, &store); err == nil && store.ID != "" {
+		return &store, nil
+	}
+
+	// Try wrapped format {"store": {...}}
+	var wrapper struct {
+		Store model.Store `json:"store"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	return &wrapper.Store, nil
 }
 
 // CreateStore creates a new store.
@@ -291,15 +334,33 @@ func (c *Client) RemoveStoreMember(slug, memberID string) error {
 
 // ListRepos returns all repos in a store.
 func (c *Client) ListRepos(store string) ([]model.Repository, error) {
+	data, err := c.request("GET", "/api/v1/stores/"+url.PathEscape(store)+"/repos", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try array first
 	var repos []model.Repository
-	if err := c.Get("/api/v1/stores/"+url.PathEscape(store)+"/repos", &repos); err != nil {
+	if err := json.Unmarshal(data, &repos); err == nil {
+		// Add store name for convenience
+		for i := range repos {
+			repos[i].Store = store
+		}
+		return repos, nil
+	}
+
+	// Try object with repos key
+	var wrapper struct {
+		Repos []model.Repository `json:"repos"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}
 	// Add store name for convenience
-	for i := range repos {
-		repos[i].Store = store
+	for i := range wrapper.Repos {
+		wrapper.Repos[i].Store = store
 	}
-	return repos, nil
+	return wrapper.Repos, nil
 }
 
 // ListAllRepos returns all repos across all stores.
@@ -322,13 +383,28 @@ func (c *Client) ListAllRepos() ([]model.Repository, error) {
 
 // GetRepo returns a repository.
 func (c *Client) GetRepo(store, name string) (*model.Repository, error) {
-	var repo model.Repository
 	path := "/api/v1/stores/" + url.PathEscape(store) + "/repos/" + url.PathEscape(name)
-	if err := c.Get(path, &repo); err != nil {
+	data, err := c.request("GET", path, nil)
+	if err != nil {
 		return nil, err
 	}
-	repo.Store = store
-	return &repo, nil
+
+	// Try direct repo object first
+	var repo model.Repository
+	if err := json.Unmarshal(data, &repo); err == nil && repo.ID != "" {
+		repo.Store = store
+		return &repo, nil
+	}
+
+	// Try wrapped format {"repo": {...}}
+	var wrapper struct {
+		Repo model.Repository `json:"repo"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	wrapper.Repo.Store = store
+	return &wrapper.Repo, nil
 }
 
 // CreateRepo creates a new repository.
@@ -415,24 +491,53 @@ func (c *Client) GetLog(store, repo, branch string, limit int) ([]model.Commit, 
 
 // ListAPIKeys returns all API keys.
 func (c *Client) ListAPIKeys() ([]model.APIKey, error) {
-	var keys []model.APIKey
-	if err := c.Get("/api/v1/api-keys", &keys); err != nil {
+	data, err := c.request("GET", "/api/v1/api-keys", nil)
+	if err != nil {
 		return nil, err
 	}
-	return keys, nil
+
+	// Try array first
+	var keys []model.APIKey
+	if err := json.Unmarshal(data, &keys); err == nil {
+		return keys, nil
+	}
+
+	// Try object with api_keys key
+	var wrapper struct {
+		APIKeys []model.APIKey `json:"api_keys"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.APIKeys, nil
 }
 
 // CreateAPIKey creates a new API key.
 func (c *Client) CreateAPIKey(label string) (*model.TokenCreateResponse, error) {
-	var resp model.TokenCreateResponse
 	body := map[string]string{}
 	if label != "" {
 		body["label"] = label
 	}
-	if err := c.Post("/api/v1/api-keys", body, &resp); err != nil {
+
+	data, err := c.request("POST", "/api/v1/api-keys", body)
+	if err != nil {
 		return nil, err
 	}
-	return &resp, nil
+
+	// Try direct response first
+	var resp model.TokenCreateResponse
+	if err := json.Unmarshal(data, &resp); err == nil && resp.RawKey != "" {
+		return &resp, nil
+	}
+
+	// Try wrapped format {"api_key": {...}}
+	var wrapper struct {
+		APIKey model.TokenCreateResponse `json:"api_key"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	return &wrapper.APIKey, nil
 }
 
 // RevokeAPIKey revokes an API key.
@@ -442,11 +547,25 @@ func (c *Client) RevokeAPIKey(id string) error {
 
 // ListScopedTokens returns all scoped tokens.
 func (c *Client) ListScopedTokens() ([]model.ScopedToken, error) {
-	var tokens []model.ScopedToken
-	if err := c.Get("/api/v1/scoped-tokens", &tokens); err != nil {
+	data, err := c.request("GET", "/api/v1/scoped-tokens", nil)
+	if err != nil {
 		return nil, err
 	}
-	return tokens, nil
+
+	// Try array first
+	var tokens []model.ScopedToken
+	if err := json.Unmarshal(data, &tokens); err == nil {
+		return tokens, nil
+	}
+
+	// Try object with scoped_tokens key
+	var wrapper struct {
+		ScopedTokens []model.ScopedToken `json:"scoped_tokens"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		return nil, err
+	}
+	return wrapper.ScopedTokens, nil
 }
 
 // CreateScopedToken creates a new scoped token.

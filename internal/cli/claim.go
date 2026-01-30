@@ -73,13 +73,13 @@ func newClaimCmd() *cobra.Command {
 				outputJSON(map[string]any{
 					"agent_id":   agentID,
 					"patterns":   patterns,
-					"expires_at": resp.ExpiresAt,
+					"expires_at": resp.GetExpiresAtString(),
 				})
 			} else {
 				success(fmt.Sprintf("Claimed patterns as %s", agentID))
 				fmt.Printf("Patterns: %v\n", patterns)
-				if resp.ExpiresAt != nil {
-					fmt.Printf("Expires: %s\n", *resp.ExpiresAt)
+				if expiresAt := resp.GetExpiresAtString(); expiresAt != nil {
+					fmt.Printf("Expires: %s\n", *expiresAt)
 				}
 				info(fmt.Sprintf("Use --agent-id %s to release", agentID))
 			}

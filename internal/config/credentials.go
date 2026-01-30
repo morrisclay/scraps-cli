@@ -69,9 +69,17 @@ func SaveCredentials(creds Credentials) error {
 
 // GetCredential returns the credential for a host.
 // If host is empty, uses the default host.
+// Checks SCRAPS_API_KEY environment variable first for easier scripting/testing.
 func GetCredential(host string) (*Credential, error) {
 	if host == "" {
 		host = GetHost()
+	}
+
+	// Check environment variable first
+	if apiKey := os.Getenv("SCRAPS_API_KEY"); apiKey != "" {
+		return &Credential{
+			APIKey: apiKey,
+		}, nil
 	}
 
 	creds, err := LoadCredentials()

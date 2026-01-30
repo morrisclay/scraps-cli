@@ -102,7 +102,11 @@ func SaveConfig(cfg *Config) error {
 }
 
 // GetHost returns the default host from config.
+// Checks SCRAPS_HOST environment variable first for easier scripting/testing.
 func GetHost() string {
+	if host := os.Getenv("SCRAPS_HOST"); host != "" {
+		return host
+	}
 	cfg, err := LoadConfig()
 	if err != nil {
 		return DefaultHost
@@ -111,7 +115,11 @@ func GetHost() string {
 }
 
 // GetOutputFormat returns the output format from config.
+// Checks SCRAPS_OUTPUT_FORMAT environment variable first for CLI flag override.
 func GetOutputFormat() string {
+	if format := os.Getenv("SCRAPS_OUTPUT_FORMAT"); format != "" {
+		return format
+	}
 	cfg, err := LoadConfig()
 	if err != nil {
 		return DefaultOutputFormat

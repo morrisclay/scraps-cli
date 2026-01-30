@@ -296,6 +296,7 @@ func signupNonInteractive(host, username, email string) error {
 	success(fmt.Sprintf("Account created! Logged in as %s", resp.User.Username))
 	fmt.Printf("\nYour API key: %s\n", key)
 	fmt.Println("Save this key - it won't be shown again!")
+	fmt.Println("\nCheck your email to verify your account.")
 	return nil
 }
 
@@ -472,12 +473,13 @@ func (m signupModel) View() string {
 			key = m.result.APIKey
 		}
 		return fmt.Sprintf(
-			"%s Account created! Logged in as %s\n\n%s %s\n%s",
+			"%s Account created! Logged in as %s\n\n%s %s\n%s\n\n%s",
 			tui.SuccessStyle.Render("✓"),
 			m.result.User.Username,
 			tui.LabelStyle.Render("Your API key:"),
 			key,
 			tui.WarningStyle.Render("Save this key - it won't be shown again!"),
+			"Check your email to verify your account.",
 		)
 	case "error":
 		return tui.ErrorStyle.Render("✗") + fmt.Sprintf(" Signup failed: %v", m.err)
@@ -519,6 +521,11 @@ func newWhoamiCmd() *cobra.Command {
 			if config.GetOutputFormat() == "json" {
 				outputJSON(user)
 			} else {
+				if user.Username == "" && user.Email == "" && user.ID == "" {
+					fmt.Printf("Host: %s\n", client.Host())
+					fmt.Println("\nUser data not available. Try logging in again: scraps login")
+					return nil
+				}
 				fmt.Printf("Username: %s\n", user.Username)
 				fmt.Printf("Email:    %s\n", user.Email)
 				fmt.Printf("User ID:  %s\n", user.ID)

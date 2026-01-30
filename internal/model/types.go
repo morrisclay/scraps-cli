@@ -129,7 +129,23 @@ type ClaimRequest struct {
 type ClaimResponse struct {
 	Type      string          `json:"type,omitempty"`
 	Conflicts []ClaimConflict `json:"conflicts,omitempty"`
-	ExpiresAt *string         `json:"expires_at,omitempty"`
+	ExpiresAt any             `json:"expires_at,omitempty"` // Can be string or number
+}
+
+// GetExpiresAtString returns the expires_at value as a string.
+func (c *ClaimResponse) GetExpiresAtString() *string {
+	if c.ExpiresAt == nil {
+		return nil
+	}
+	switch v := c.ExpiresAt.(type) {
+	case string:
+		return &v
+	case float64:
+		s := time.Unix(int64(v), 0).Format(time.RFC3339)
+		return &s
+	default:
+		return nil
+	}
 }
 
 // ClaimConflict represents a conflicting claim.

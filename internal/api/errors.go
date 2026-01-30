@@ -10,6 +10,9 @@ type APIError struct {
 
 // Error implements the error interface.
 func (e *APIError) Error() string {
+	if e.StatusCode == 401 {
+		return "You are not logged in or don't have necessary permissions. Run 'scraps login' and try again."
+	}
 	if e.Message != "" {
 		return fmt.Sprintf("API error (%d): %s", e.StatusCode, e.Message)
 	}

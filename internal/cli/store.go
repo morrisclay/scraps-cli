@@ -112,13 +112,23 @@ func newStoreListCmd() *cobra.Command {
 
 func newStoreCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "create <slug>",
-		Short: "Create a new store",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <slug>",
+		Short:   "Create a new store",
+		Example: "  scraps store create mystore",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				return fmt.Errorf("store slug required. Usage: scraps store create <slug>")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := api.NewClientFromConfig("")
 			if err != nil {
 				return err
+			}
+
+			if config.GetOutputFormat() != "json" {
+				fmt.Printf("Creating store '%s'...\n", args[0])
 			}
 
 			store, err := client.CreateStore(args[0])
