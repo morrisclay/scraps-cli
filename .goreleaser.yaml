@@ -23,9 +23,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/scraps-sh/scraps-cli/pkg/version.Version={{.Version}}
-      - -X github.com/scraps-sh/scraps-cli/pkg/version.Commit={{.Commit}}
-      - -X github.com/scraps-sh/scraps-cli/pkg/version.Date={{.Date}}
+      - -X github.com/morrisclay/scraps-cli/pkg/version.Version={{.Version}}
+      - -X github.com/morrisclay/scraps-cli/pkg/version.Commit={{.Commit}}
+      - -X github.com/morrisclay/scraps-cli/pkg/version.Date={{.Date}}
 
 archives:
   - id: default
@@ -57,7 +57,7 @@ changelog:
 brews:
   - name: scraps
     repository:
-      owner: scraps-sh
+      owner: morrisclay
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Formula
@@ -83,7 +83,7 @@ nfpms:
 
 release:
   github:
-    owner: scraps-sh
+    owner: morrisclay
     name: scraps-cli
   draft: false
   prerelease: auto
