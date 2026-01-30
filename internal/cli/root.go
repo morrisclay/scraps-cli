@@ -10,6 +10,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// versionWithCheck returns version info and checks for updates.
+func versionWithCheck() string {
+	result := "scraps version " + version.Version
+
+	latest, err := version.CheckLatest()
+	if err != nil {
+		return result
+	}
+
+	if version.IsOutdated(version.Version, latest) {
+		result += fmt.Sprintf("\n\n! Update available: %s → %s", version.Version, latest)
+		result += "\n  Run: curl -fsSL https://scraps.sh/install.sh | sh"
+	}
+
+	return result
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "scraps",
 	Short: "Scraps CLI - Git-native context sharing for AI agents",
@@ -40,6 +57,10 @@ const (
 func init() {
 	// Disable default completion command
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
+
+	// Custom version template with update check
+	cobra.AddTemplateFunc("versionWithCheck", versionWithCheck)
+	rootCmd.SetVersionTemplate("{{versionWithCheck}}\n")
 
 	// Define command groups in display order
 	rootCmd.AddGroup(
