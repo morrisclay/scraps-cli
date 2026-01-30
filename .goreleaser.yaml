@@ -1,0 +1,93 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+version: 2
+
+project_name: scraps
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: scraps
+    main: ./cmd/scraps
+    binary: scraps
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/scraps-sh/scraps-cli/pkg/version.Version={{.Version}}
+      - -X github.com/scraps-sh/scraps-cli/pkg/version.Commit={{.Commit}}
+      - -X github.com/scraps-sh/scraps-cli/pkg/version.Date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+brews:
+  - name: scraps
+    repository:
+      owner: scraps-sh
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://scraps.sh"
+    description: "Git-native context sharing for AI agents"
+    license: "MIT"
+    install: |
+      bin.install "scraps"
+    test: |
+      system "#{bin}/scraps", "--version"
+
+nfpms:
+  - id: packages
+    package_name: scraps
+    vendor: Scraps
+    homepage: https://scraps.sh
+    maintainer: Scraps <support@scraps.sh>
+    description: Git-native context sharing for AI agents
+    license: MIT
+    formats:
+      - deb
+      - rpm
+
+release:
+  github:
+    owner: scraps-sh
+    name: scraps-cli
+  draft: false
+  prerelease: auto
+  name_template: "v{{.Version}}"
+
+announce:
+  skip: true
