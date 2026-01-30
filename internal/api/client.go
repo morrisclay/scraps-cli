@@ -524,20 +524,26 @@ func (c *Client) CreateAPIKey(label string) (*model.TokenCreateResponse, error) 
 		return nil, err
 	}
 
-	// Try direct response first
-	var resp model.TokenCreateResponse
-	if err := json.Unmarshal(data, &resp); err == nil && resp.RawKey != "" {
-		return &resp, nil
-	}
-
-	// Try wrapped format {"api_key": {...}}
+	// API returns: {"api_key": {"id": "...", ...}, "raw_key": "..."}
 	var wrapper struct {
-		APIKey model.TokenCreateResponse `json:"api_key"`
+		APIKey struct {
+			ID        string  `json:"id"`
+			KeyPrefix string  `json:"key_prefix"`
+			Label     string  `json:"label"`
+			ExpiresAt *string `json:"expires_at"`
+		} `json:"api_key"`
+		RawKey string `json:"raw_key"`
 	}
 	if err := json.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}
-	return &wrapper.APIKey, nil
+
+	return &model.TokenCreateResponse{
+		ID:        wrapper.APIKey.ID,
+		RawKey:    wrapper.RawKey,
+		Label:     wrapper.APIKey.Label,
+		ExpiresAt: wrapper.APIKey.ExpiresAt,
+	}, nil
 }
 
 // RevokeAPIKey revokes an API key.
