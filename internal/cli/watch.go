@@ -327,6 +327,23 @@ func (m *watchModel) processMessage(data []byte) {
 			event.Details = strings.Join(activity.Activity.Patterns, "\n")
 		}
 
+	case "agent_claim":
+		var claim model.AgentClaimEvent
+		json.Unmarshal(data, &claim)
+		event.Type = "CLAIM"
+		event.Summary = claim.AgentID
+		if claim.Claim != "" {
+			event.Summary += " - " + truncate(claim.Claim, 30)
+		}
+		event.Details = strings.Join(claim.Patterns, "\n")
+
+	case "agent_release":
+		var release model.AgentClaimEvent
+		json.Unmarshal(data, &release)
+		event.Type = "RELEASE"
+		event.Summary = release.AgentID
+		event.Details = strings.Join(release.Patterns, "\n")
+
 	default:
 		event.Summary = string(data)
 	}

@@ -209,6 +209,17 @@ type Activity struct {
 	Claim    string   `json:"claim,omitempty"`
 }
 
+// AgentClaimEvent represents an agent_claim or agent_release event from streaming API.
+type AgentClaimEvent struct {
+	Type        string   `json:"type"`
+	AgentID     string   `json:"agent_id"`
+	Branch      string   `json:"branch,omitempty"`
+	Claim       string   `json:"claim,omitempty"`
+	Patterns    []string `json:"patterns,omitempty"`
+	WorkspaceID string   `json:"workspace_id,omitempty"`
+	Timestamp   string   `json:"timestamp,omitempty"`
+}
+
 // Reference represents a parsed store/repo:branch:path reference.
 type Reference struct {
 	Store  string
