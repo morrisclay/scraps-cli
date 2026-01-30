@@ -657,6 +657,7 @@ func (c *Client) BuildWebSocketURL(store, repo string, branch string) string {
 }
 
 // BuildClaimsWebSocketURL returns the WebSocket URL for watching claims.
+// Deprecated: Use BuildStreamURL instead.
 func (c *Client) BuildClaimsWebSocketURL(store, repo, branch string) string {
 	host := c.host
 	protocol := "wss"
@@ -669,4 +670,10 @@ func (c *Client) BuildClaimsWebSocketURL(store, repo, branch string) string {
 
 	return fmt.Sprintf("%s://%s/stores/%s/repos/%s/branches/%s/coordinate/tail?token=%s",
 		protocol, host, url.PathEscape(store), url.PathEscape(repo), url.PathEscape(branch), url.QueryEscape(c.apiKey))
+}
+
+// BuildStreamURL returns the URL for the event streaming endpoint.
+func (c *Client) BuildStreamURL(store, repo string) string {
+	return fmt.Sprintf("%s/api/v1/stores/%s/repos/%s/streams/events/live",
+		c.host, url.PathEscape(store), url.PathEscape(repo))
 }

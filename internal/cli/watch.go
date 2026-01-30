@@ -14,8 +14,8 @@ import (
 	"github.com/morrisclay/scraps-cli/internal/api"
 	"github.com/morrisclay/scraps-cli/internal/config"
 	"github.com/morrisclay/scraps-cli/internal/model"
+	"github.com/morrisclay/scraps-cli/internal/stream"
 	"github.com/morrisclay/scraps-cli/internal/tui"
-	"github.com/morrisclay/scraps-cli/internal/ws"
 )
 
 func newWatchCmd() *cobra.Command {
@@ -36,10 +36,6 @@ func newWatchCmd() *cobra.Command {
 				branch = parsedBranch
 			}
 
-			if claims && branch == "" {
-				return fmt.Errorf("--claims requires a branch (use store/repo:branch format)")
-			}
-
 			client, err := api.NewClientFromConfig("")
 			if err != nil {
 				return err
@@ -51,28 +47,22 @@ func newWatchCmd() *cobra.Command {
 			}
 
 			// Non-interactive: just stream to stdout
-			return runWatchNonInteractive(client, store, repo, branch, claims)
+			return runWatchNonInteractive(client, store, repo, branch)
 		},
 	}
 
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Filter to specific branch")
 	cmd.Flags().StringVar(&lastEvent, "last-event", "", "Resume from event ID")
-	cmd.Flags().BoolVar(&claims, "claims", false, "Watch claim/release activity (requires branch)")
+	cmd.Flags().BoolVar(&claims, "claims", false, "Show claim/release activity")
 
 	return cmd
 }
 
-func runWatchNonInteractive(client *api.Client, store, repo, branch string, claims bool) error {
-	var wsURL string
-	if claims {
-		wsURL = client.BuildClaimsWebSocketURL(store, repo, branch)
-	} else {
-		wsURL = client.BuildWebSocketURL(store, repo, branch)
-	}
+func runWatchNonInteractive(client *api.Client, store, repo, branch string) error {
+	streamURL := client.BuildStreamURL(store, repo)
+	streamClient := stream.NewClient(streamURL, client.APIKey())
 
-	wsClient := ws.NewClient(wsURL)
-
-	wsClient.OnMessage = func(data []byte) {
+	streamClient.OnMessage = func(data []byte) {
 		// Pretty print JSON
 		var msg map[string]any
 		if json.Unmarshal(data, &msg) == nil {
@@ -83,52 +73,49 @@ func runWatchNonInteractive(client *api.Client, store, repo, branch string, clai
 		}
 	}
 
-	wsClient.OnError = func(err error) {
-		errorf("WebSocket error: %v", err)
+	streamClient.OnError = func(err error) {
+		errorf("Stream error: %v", err)
 	}
 
-	wsClient.OnClose = func() {
+	streamClient.OnClose = func() {
 		info("Connection closed")
 	}
 
-	if err := wsClient.Connect(); err != nil {
+	if err := streamClient.Connect(); err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer wsClient.Close()
+	defer streamClient.Close()
 
 	info(fmt.Sprintf("Watching %s/%s", store, repo))
 	if branch != "" {
 		fmt.Printf("Branch: %s\n", branch)
 	}
-	if claims {
-		fmt.Println("Mode: Claims activity")
-	}
 	fmt.Println("Press Ctrl+C to stop")
 	fmt.Println()
 
 	// Wait for connection to close
-	<-wsClient.Done()
+	<-streamClient.Done()
 	return nil
 }
 
 // watchModel is the TUI model for watching events.
 type watchModel struct {
-	client     *api.Client
-	wsClient   *ws.Client
-	store      string
-	repo       string
-	branch     string
-	claims     bool
-	connected  bool
-	events     []watchEvent
-	eventCount int
-	viewport   viewport.Model
-	ready      bool
-	filter     string
-	showClaims bool
-	width      int
-	height     int
-	err        error
+	client       *api.Client
+	streamClient *stream.Client
+	store        string
+	repo         string
+	branch       string
+	claims       bool
+	connected    bool
+	events       []watchEvent
+	eventCount   int
+	viewport     viewport.Model
+	ready        bool
+	filter       string
+	showClaims   bool
+	width        int
+	height       int
+	err          error
 }
 
 type watchEvent struct {
@@ -138,10 +125,10 @@ type watchEvent struct {
 	Details string
 }
 
-type wsConnectedMsg struct{}
-type wsMessageMsg struct{ data []byte }
-type wsErrorMsg struct{ err error }
-type wsClosedMsg struct{}
+type streamConnectedMsg struct{}
+type streamMessageMsg struct{ data []byte }
+type streamErrorMsg struct{ err error }
+type streamClosedMsg struct{}
 
 func newWatchModel(client *api.Client, store, repo, branch string, claims bool) watchModel {
 	return watchModel{
@@ -159,27 +146,21 @@ func (m watchModel) Init() tea.Cmd {
 	return m.connect()
 }
 
-func (m watchModel) connect() tea.Cmd {
+func (m *watchModel) connect() tea.Cmd {
 	return func() tea.Msg {
-		var wsURL string
-		if m.claims {
-			wsURL = m.client.BuildClaimsWebSocketURL(m.store, m.repo, m.branch)
-		} else {
-			wsURL = m.client.BuildWebSocketURL(m.store, m.repo, m.branch)
+		streamURL := m.client.BuildStreamURL(m.store, m.repo)
+		m.streamClient = stream.NewClient(streamURL, m.client.APIKey())
+
+		if err := m.streamClient.Connect(); err != nil {
+			return streamErrorMsg{err: err}
 		}
 
-		m.wsClient = ws.NewClient(wsURL)
-
-		if err := m.wsClient.Connect(); err != nil {
-			return wsErrorMsg{err: err}
-		}
-
-		return wsConnectedMsg{}
+		return streamConnectedMsg{}
 	}
 }
 
 func (m watchModel) waitForMessage() tea.Cmd {
-	if m.wsClient == nil {
+	if m.streamClient == nil {
 		return nil
 	}
 
@@ -187,19 +168,19 @@ func (m watchModel) waitForMessage() tea.Cmd {
 	errChan := make(chan error, 1)
 	closeChan := make(chan struct{}, 1)
 
-	m.wsClient.OnMessage = func(data []byte) {
+	m.streamClient.OnMessage = func(data []byte) {
 		select {
 		case msgChan <- data:
 		default:
 		}
 	}
-	m.wsClient.OnError = func(err error) {
+	m.streamClient.OnError = func(err error) {
 		select {
 		case errChan <- err:
 		default:
 		}
 	}
-	m.wsClient.OnClose = func() {
+	m.streamClient.OnClose = func() {
 		select {
 		case closeChan <- struct{}{}:
 		default:
@@ -209,11 +190,11 @@ func (m watchModel) waitForMessage() tea.Cmd {
 	return func() tea.Msg {
 		select {
 		case data := <-msgChan:
-			return wsMessageMsg{data: data}
+			return streamMessageMsg{data: data}
 		case err := <-errChan:
-			return wsErrorMsg{err: err}
+			return streamErrorMsg{err: err}
 		case <-closeChan:
-			return wsClosedMsg{}
+			return streamClosedMsg{}
 		}
 	}
 }
@@ -242,8 +223,8 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "ctrl+c"))):
-			if m.wsClient != nil {
-				m.wsClient.Close()
+			if m.streamClient != nil {
+				m.streamClient.Close()
 			}
 			return m, tea.Quit
 		case key.Matches(msg, key.NewBinding(key.WithKeys("c"))):
@@ -253,21 +234,21 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// TODO: implement filtering
 		}
 
-	case wsConnectedMsg:
+	case streamConnectedMsg:
 		m.connected = true
 		return m, m.waitForMessage()
 
-	case wsMessageMsg:
+	case streamMessageMsg:
 		m.processMessage(msg.data)
 		m.updateViewport()
 		return m, m.waitForMessage()
 
-	case wsErrorMsg:
+	case streamErrorMsg:
 		m.err = msg.err
 		m.connected = false
 		return m, nil
 
-	case wsClosedMsg:
+	case streamClosedMsg:
 		m.connected = false
 		return m, nil
 	}
@@ -430,12 +411,10 @@ func (m watchModel) View() string {
 	// Footer
 	s.WriteString("\n")
 	helpText := "q quit"
-	if !m.claims {
-		if m.showClaims {
-			helpText += "  c hide claims"
-		} else {
-			helpText += "  c show claims"
-		}
+	if m.showClaims {
+		helpText += "  c hide claims"
+	} else {
+		helpText += "  c show claims"
 	}
 	helpText += "  / filter"
 	s.WriteString(tui.HelpStyle.Render(helpText))
