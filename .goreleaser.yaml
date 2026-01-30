@@ -54,21 +54,6 @@ changelog:
       - "^ci:"
       - "^chore:"
 
-brews:
-  - name: scraps
-    repository:
-      owner: morrisclay
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: "https://scraps.sh"
-    description: "Git-native context sharing for AI agents"
-    license: "MIT"
-    install: |
-      bin.install "scraps"
-    test: |
-      system "#{bin}/scraps", "--version"
-
 nfpms:
   - id: packages
     package_name: scraps
