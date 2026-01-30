@@ -59,12 +59,17 @@ Examples:
         info(`API key: ${result.api_key}`);
 
         if (opts.login !== false) {
+          // Fetch user info with the new key to get user_id and username
+          const authClient = new ScrapsClient(host, result.api_key);
+          const userResult = await authClient.get("/api/v1/user");
+          const user = userResult.user || userResult;
+
           setCredential(host, {
             api_key: result.api_key,
-            user_id: result.user_id,
-            username: result.username,
+            user_id: user.id,
+            username: user.username,
           });
-          info(`You are now logged in as ${result.username}`);
+          info(`You are now logged in as ${user.username}`);
         }
       } catch (e: any) {
         error(`Failed to confirm reset: ${e.message}`);

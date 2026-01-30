@@ -153,16 +153,22 @@ Examples:
       try {
         const result = await client.post("/api/v1/signup", { username, email });
 
-        // Auto-login with the returned API key
-        setCredential(host, {
-          api_key: result.api_key,
-          user_id: result.user.id,
-          username: result.user.username,
-        });
-
         success(`Account created for ${username}`);
-        info(`API key: ${result.api_key}`);
-        info("You are now logged in");
+
+        if (result.api_key) {
+          // Legacy flow (no email verification required)
+          setCredential(host, {
+            api_key: result.api_key,
+            user_id: result.user.id,
+            username: result.user.username,
+          });
+          info(`API key: ${result.api_key}`);
+          info("You are now logged in");
+        } else {
+          // Email verification required
+          info("Check your email to confirm your account");
+          info("After confirming, run 'scraps login' with your API key");
+        }
       } catch (e: any) {
         error(`Signup failed: ${e.message}`);
         process.exit(1);
