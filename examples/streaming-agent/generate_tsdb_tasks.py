@@ -18,15 +18,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-arrow = { version = "50", features = ["ipc"] }
+arrow = { version = "53", features = ["ipc"] }
 tokio = { version = "1", features = ["full"] }
 hyper = { version = "1", features = ["full"] }
 http-body-util = "0.1"
 hyper-util = { version = "0.1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlparser = "0.43"
-thiserror = "1"
+sqlparser = "0.50"
+thiserror = "2"
 bytes = "1"
 parking_lot = "0.12"
 tracing = "0.1"
