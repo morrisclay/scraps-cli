@@ -47,7 +47,8 @@ BRANCH = os.environ.get("BRANCH", "main")
 AGENT_ID = os.environ.get("AGENT_ID", f"worker-{os.getpid()}")
 MAX_TASKS = int(os.environ.get("MAX_TASKS", "0"))  # 0 = unlimited
 
-POLL_INTERVAL = 3.0  # seconds between polling for tasks
+POLL_INTERVAL = 2.0  # seconds between polling for tasks
+MAX_WAIT_FOR_TASKS = 120  # seconds to wait for tasks before giving up
 
 # ---------------------------------------------------------------------------
 # Tools for Claude
@@ -438,8 +439,7 @@ def main():
     scraps.stream_event("agent_join", agent_name=AGENT_ID, role="worker")
 
     tasks_completed = 0
-    consecutive_empty = 0
-    max_empty = 10  # Exit after 10 consecutive polls with no tasks
+    start_time = time.time()
 
     try:
         while True:
@@ -448,17 +448,51 @@ def main():
                 print(f"\nCompleted {tasks_completed} tasks, exiting")
                 break
 
-            # Find a pending task
+            # Find a pending task (with deps satisfied)
             result = find_pending_task(scraps)
 
             if result is None:
-                consecutive_empty += 1
-                if consecutive_empty >= max_empty:
-                    print(f"\nNo tasks found for {max_empty} polls, exiting")
+                elapsed = time.time() - start_time
+
+                # Check what's blocking us
+                all_tasks = scraps.get_all_tasks()
+                pending = [t for t in all_tasks if t.status == "pending"]
+                in_progress = [t for t in all_tasks if t.status == "in_progress"]
+                completed = [t for t in all_tasks if t.status == "completed"]
+
+                # If all tasks are done, exit
+                if len(pending) == 0 and len(in_progress) == 0:
+                    if len(completed) > 0:
+                        print(f"\nAll tasks completed!")
+                    else:
+                        print(f"\nNo tasks found")
                     break
-                print(f"No pending tasks, waiting... ({consecutive_empty}/{max_empty})")
+
+                # If we've waited too long, exit
+                if elapsed > MAX_WAIT_FOR_TASKS:
+                    print(f"\nTimed out waiting for tasks after {int(elapsed)}s")
+                    break
+
+                # Show what we're waiting for
+                waiting_on = []
+                for t in pending:
+                    if t.depends_on:
+                        unmet = [d for d in t.depends_on if not any(c.get_task_number() == d for c in completed)]
+                        if unmet:
+                            waiting_on.append(f"{t.get_task_number()} (waiting for {unmet})")
+
+                if waiting_on:
+                    print(f"Waiting for dependencies: {waiting_on[:2]}... ({int(elapsed)}s)")
+                elif in_progress:
+                    print(f"Waiting for {len(in_progress)} in-progress task(s)... ({int(elapsed)}s)")
+                else:
+                    print(f"Waiting for tasks... ({int(elapsed)}s)")
+
                 time.sleep(POLL_INTERVAL)
                 continue
+
+            # Reset timer when we find work
+            start_time = time.time()
 
             consecutive_empty = 0
             task_path, task_content = result

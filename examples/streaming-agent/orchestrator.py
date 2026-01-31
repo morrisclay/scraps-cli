@@ -187,20 +187,23 @@ FILE OWNERSHIP IS CRITICAL:
 - Later tasks that need that file should depend on the task that owns it
 
 TASK STRUCTURE:
-- Task 001 should be "Project Setup" - owns config files, requirements.txt, __init__.py files
-- Later tasks build on the foundation and depend on earlier tasks
-- Each task should own 2-5 files maximum
+- Task 001 should be "Project Setup" - owns config files only (package.json, tsconfig.json)
+- Create PARALLEL tasks where possible - not everything needs to be sequential
+- Each task should own 1-3 files maximum for faster completion
 
-DEPENDENCIES:
+DEPENDENCIES - IMPORTANT FOR PARALLELISM:
 - Use task numbers in depends_on (e.g., ["001", "002"])
+- ONLY add a dependency if the task truly needs files from another task
+- Tasks with the same dependencies can run IN PARALLEL
 - A task won't start until all its dependencies are completed
-- This ensures files are created before other tasks need to read them
 
-Example task breakdown for a TypeScript API:
-- 001-project-setup: owns [package.json, tsconfig.json, src/index.ts]
+Example task breakdown for PARALLEL execution:
+- 001-project-setup: owns [package.json, tsconfig.json] - NO deps, runs first
 - 002-types: owns [src/types.ts], depends_on: [001]
-- 003-storage: owns [src/store.ts], depends_on: [001, 002]
-- 004-routes: owns [src/routes.ts], depends_on: [001, 002, 003]
+- 003-store: owns [src/store.ts], depends_on: [001] - PARALLEL with 002!
+- 004-routes: owns [src/routes.ts, src/index.ts], depends_on: [002, 003] - waits for both
+
+This allows 002 and 003 to run simultaneously on different workers!
 
 Task priorities:
 - 1: Critical/blocking (setup tasks)
