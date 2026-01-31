@@ -204,8 +204,8 @@ class ScrapsClient:
         except httpx.RequestError as e:
             print(f"  [stream] Error sending {event_type}: {e}")
 
-    def claim(self, patterns: list[str], reason: str, ttl_seconds: int = 300) -> bool:
-        """Claim exclusive access to files. Claims expire after ttl_seconds (default 5 min)."""
+    def claim(self, patterns: list[str], reason: str, ttl_seconds: int = 90) -> bool:
+        """Claim exclusive access to files. Claims expire after ttl_seconds (default 90s)."""
         try:
             r = self.http.post(
                 f"/stores/{self.store}/repos/{self.repo}/branches/{self.branch}/coordinate/claim",
