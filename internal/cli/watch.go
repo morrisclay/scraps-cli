@@ -65,6 +65,13 @@ Examples:
 	return cmd
 }
 
+// streamState tracks in-progress file streaming for cursor updates
+type streamState struct {
+	lastChunkAgent string
+	lastChunkFile  string
+	hasChunkLine   bool
+}
+
 func runWatch(client *api.Client, store, repo, branch, path string) error {
 	info(fmt.Sprintf("Watching %s/%s", store, repo))
 	if branch != "" {
@@ -81,7 +88,7 @@ func runWatch(client *api.Client, store, repo, branch, path string) error {
 	} else if len(events) > 0 {
 		fmt.Printf("\n--- Recent events (%d) ---\n", len(events))
 		for i := len(events) - 1; i >= 0; i-- {
-			printEvent(events[i])
+			printEvent(events[i], nil) // No cursor updates for historical
 		}
 		fmt.Println("--- Live events ---")
 	} else {
@@ -94,6 +101,8 @@ func runWatch(client *api.Client, store, repo, branch, path string) error {
 	opts := &api.StreamOptions{Branch: branch, Path: path}
 	streamURL := client.BuildStreamURL(store, repo, opts)
 
+	state := &streamState{}
+
 	// Auto-reconnect loop
 	for {
 		streamClient := stream.NewClient(streamURL, client.APIKey())
@@ -101,7 +110,7 @@ func runWatch(client *api.Client, store, repo, branch, path string) error {
 		streamClient.OnMessage = func(data []byte) {
 			var msg map[string]any
 			if json.Unmarshal(data, &msg) == nil {
-				printEvent(msg)
+				printEvent(msg, state)
 			} else {
 				fmt.Println(string(data))
 			}
@@ -166,10 +175,48 @@ func coloredType(eventType string) string {
 	return fmt.Sprintf("%s[%s]%s", color, eventType, colorReset)
 }
 
-func printEvent(event map[string]any) {
+func printEvent(event map[string]any, state *streamState) {
 	eventType, _ := event["type"].(string)
 	agentID, _ := event["agent_id"].(string)
 	tag := coloredType(eventType)
+
+	// Handle file_chunk specially for cursor updates
+	if eventType == "file_chunk" {
+		path, _ := event["path"].(string)
+		version, _ := event["version"].(float64)
+
+		if state != nil {
+			// Check if this is a continuation of the same stream
+			sameStream := state.lastChunkAgent == agentID && state.lastChunkFile == path
+
+			if sameStream && state.hasChunkLine {
+				// Update in place with carriage return
+				fmt.Printf("\r  %s %s streaming %s (%d chars)    ", tag, agentID, path, int(version))
+			} else {
+				// New stream or first chunk - finish previous line if any
+				if state.hasChunkLine {
+					fmt.Println() // Commit previous line
+				}
+				fmt.Printf("  %s %s streaming %s (%d chars)", tag, agentID, path, int(version))
+			}
+
+			state.lastChunkAgent = agentID
+			state.lastChunkFile = path
+			state.hasChunkLine = true
+		} else {
+			// No state (historical) - just print normally
+			fmt.Printf("  %s %s streaming %s (%d chars)\n", tag, agentID, path, int(version))
+		}
+		return
+	}
+
+	// For non-chunk events, commit any pending chunk line first
+	if state != nil && state.hasChunkLine {
+		fmt.Println() // Finish the chunk line
+		state.hasChunkLine = false
+		state.lastChunkAgent = ""
+		state.lastChunkFile = ""
+	}
 
 	// Compact format for common events
 	switch eventType {
@@ -188,10 +235,6 @@ func printEvent(event map[string]any) {
 	case "file_write":
 		path, _ := event["path"].(string)
 		fmt.Printf("  %s %s wrote %s\n", tag, agentID, path)
-	case "file_chunk":
-		path, _ := event["path"].(string)
-		version, _ := event["version"].(float64)
-		fmt.Printf("  %s %s streaming %s (%d chars)\n", tag, agentID, path, int(version))
 	case "commit":
 		sha, _ := event["sha"].(string)
 		msg, _ := event["message"].(string)
