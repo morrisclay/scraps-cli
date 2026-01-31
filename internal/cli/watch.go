@@ -129,41 +129,79 @@ func runWatch(client *api.Client, store, repo, branch, path string) error {
 	}
 }
 
+// ANSI color codes
+const (
+	colorReset   = "\033[0m"
+	colorGreen   = "\033[32m"
+	colorYellow  = "\033[33m"
+	colorBlue    = "\033[34m"
+	colorMagenta = "\033[35m"
+	colorCyan    = "\033[36m"
+	colorRed     = "\033[31m"
+	colorGray    = "\033[90m"
+)
+
+func coloredType(eventType string) string {
+	var color string
+	switch eventType {
+	case "agent_join":
+		color = colorGreen
+	case "agent_leave":
+		color = colorYellow
+	case "agent_claim":
+		color = colorMagenta
+	case "agent_release":
+		color = colorCyan
+	case "file_write":
+		color = colorBlue
+	case "file_chunk":
+		color = colorGray
+	case "commit":
+		color = colorGreen
+	case "error":
+		color = colorRed
+	default:
+		color = colorReset
+	}
+	return fmt.Sprintf("%s[%s]%s", color, eventType, colorReset)
+}
+
 func printEvent(event map[string]any) {
 	eventType, _ := event["type"].(string)
 	agentID, _ := event["agent_id"].(string)
+	tag := coloredType(eventType)
 
 	// Compact format for common events
 	switch eventType {
 	case "agent_join":
 		role, _ := event["role"].(string)
-		fmt.Printf("  [%s] %s joined (%s)\n", eventType, agentID, role)
+		fmt.Printf("  %s %s joined (%s)\n", tag, agentID, role)
 	case "agent_leave":
 		role, _ := event["role"].(string)
-		fmt.Printf("  [%s] %s left (%s)\n", eventType, agentID, role)
+		fmt.Printf("  %s %s left (%s)\n", tag, agentID, role)
 	case "agent_claim":
 		patterns, _ := event["patterns"].([]any)
-		fmt.Printf("  [%s] %s claimed %v\n", eventType, agentID, patterns)
+		fmt.Printf("  %s %s claimed %v\n", tag, agentID, patterns)
 	case "agent_release":
 		patterns, _ := event["patterns"].([]any)
-		fmt.Printf("  [%s] %s released %v\n", eventType, agentID, patterns)
+		fmt.Printf("  %s %s released %v\n", tag, agentID, patterns)
 	case "file_write":
 		path, _ := event["path"].(string)
-		fmt.Printf("  [%s] %s wrote %s\n", eventType, agentID, path)
+		fmt.Printf("  %s %s wrote %s\n", tag, agentID, path)
 	case "file_chunk":
 		path, _ := event["path"].(string)
 		version, _ := event["version"].(float64)
-		fmt.Printf("  [%s] %s streaming %s (%d chars)\n", eventType, agentID, path, int(version))
+		fmt.Printf("  %s %s streaming %s (%d chars)\n", tag, agentID, path, int(version))
 	case "commit":
 		sha, _ := event["sha"].(string)
 		msg, _ := event["message"].(string)
 		if len(sha) > 7 {
 			sha = sha[:7]
 		}
-		fmt.Printf("  [%s] %s %s\n", eventType, sha, msg)
+		fmt.Printf("  %s %s %s\n", tag, sha, msg)
 	case "error":
 		errMsg, _ := event["error"].(string)
-		fmt.Printf("  [%s] %s: %s\n", eventType, agentID, errMsg)
+		fmt.Printf("  %s %s: %s\n", tag, agentID, errMsg)
 	default:
 		// Full JSON for unknown events
 		formatted, _ := json.MarshalIndent(event, "  ", "  ")
