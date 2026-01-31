@@ -24,7 +24,8 @@ import httpx
 
 
 # Default model to use via OpenRouter
-DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-sonnet-4")
+# Options: google/gemini-2.0-flash-001 (fast+cheap), deepseek/deepseek-chat (cheapest), anthropic/claude-3.5-haiku (reliable)
+DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
 
 
 # ---------------------------------------------------------------------------
