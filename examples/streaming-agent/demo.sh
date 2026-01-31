@@ -128,25 +128,10 @@ get_store() {
 setup_repo() {
     echo -e "${BLUE}Setting up repository...${NC}"
 
-    if scraps repo show "$STORE/$REPO" &> /dev/null; then
-        echo "  Repo exists: $REPO"
-        echo ""
-        echo -e "${YELLOW}Options:${NC}"
-        echo "  1) Reuse existing repo (continue where left off)"
-        echo "  2) Create new repo with fresh name"
-        read -p "Choice (1/2, default: 2): " choice
-        if [ "$choice" = "1" ]; then
-            echo "  Reusing existing repo"
-        else
-            # Use a new unique name
-            REPO="multi-agent-$(date +%H%M%S)"
-            echo "  Creating new repo: $REPO"
-            scraps repo create "$STORE/$REPO"
-        fi
-    else
-        echo "  Creating repo: $REPO"
-        scraps repo create "$STORE/$REPO"
-    fi
+    # Always create a new repo with unique name
+    REPO="demo-$(date +%H%M%S)"
+    echo "  Creating repo: $REPO"
+    scraps repo create "$STORE/$REPO"
 
     echo -e "${GREEN}* Repository ready: $STORE/$REPO${NC}"
 }
@@ -296,18 +281,6 @@ main() {
     # Setup
     setup_repo
 
-    # Ask for worker count if not specified via --workers
-    if [ "$WORKER_COUNT" -eq 2 ]; then
-        echo ""
-        echo -e "${YELLOW}How many worker agents? (1-5, default: 2)${NC}"
-        read -p "> " input_count
-        if [ -n "$input_count" ]; then
-            WORKER_COUNT="$input_count"
-            if [ "$WORKER_COUNT" -lt 1 ] 2>/dev/null; then WORKER_COUNT=1; fi
-            if [ "$WORKER_COUNT" -gt 5 ] 2>/dev/null; then WORKER_COUNT=5; fi
-        fi
-    fi
-
     echo ""
     echo -e "${GREEN}Configuration:${NC}"
     echo "  Store: $STORE"
@@ -316,8 +289,6 @@ main() {
 
     # Print watch command for user to run in another terminal
     print_watch_command
-
-    read -p "Press Enter to start the demo... "
 
     # Run the phases
     run_orchestrator
