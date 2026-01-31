@@ -204,12 +204,17 @@ class ScrapsClient:
         except httpx.RequestError as e:
             print(f"  [stream] Error sending {event_type}: {e}")
 
-    def claim(self, patterns: list[str], reason: str) -> bool:
-        """Claim exclusive access to files."""
+    def claim(self, patterns: list[str], reason: str, ttl_seconds: int = 300) -> bool:
+        """Claim exclusive access to files. Claims expire after ttl_seconds (default 5 min)."""
         try:
             r = self.http.post(
                 f"/stores/{self.store}/repos/{self.repo}/branches/{self.branch}/coordinate/claim",
-                json={"agent_id": self.agent_id, "patterns": patterns, "claim": reason},
+                json={
+                    "agent_id": self.agent_id,
+                    "patterns": patterns,
+                    "claim": reason,
+                    "ttl_seconds": ttl_seconds,
+                },
             )
             if r.status_code == 200:
                 self.stream_event("agent_claim", patterns=patterns, reason=reason)
