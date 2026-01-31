@@ -20,6 +20,7 @@ import os
 import sys
 import json
 import time
+import random
 
 import openai
 from agent_base import ScrapsClient, ClaudeAgent, StreamDebouncer, parse_task_file
@@ -104,13 +105,14 @@ TOOLS = [
 ]
 
 
-def find_pending_task(scraps: ScrapsClient) -> tuple[str, str] | None:
-    """Find a pending task that can be claimed and has dependencies met. Returns (path, content) or None."""
+def find_available_tasks(scraps: ScrapsClient) -> list[tuple[str, str]]:
+    """Find all available tasks (pending, deps met). Returns shuffled list of (path, content)."""
     files = scraps.list_files("tasks")
 
     # First, get all tasks to check dependency status
     all_tasks = {}
-    for filepath in sorted(files):
+    task_contents = {}
+    for filepath in files:
         if not filepath.endswith(".md"):
             continue
         content = scraps.read_file(filepath)
@@ -119,24 +121,19 @@ def find_pending_task(scraps: ScrapsClient) -> tuple[str, str] | None:
             task_num = task.get_task_number()
             if task_num:
                 all_tasks[task_num] = task
+                task_contents[filepath] = content
 
-    # Find a task that is pending, unclaimed, and has all dependencies completed
-    for filepath in sorted(files):
-        if not filepath.endswith(".md"):
-            continue
-
-        content = scraps.read_file(filepath)
-        if not content:
-            continue
-
+    # Find all tasks that are available (pending, unclaimed, deps met)
+    available = []
+    for filepath, content in task_contents.items():
         task = parse_task_file(filepath, content)
 
-        # Skip completed tasks
-        if task.status == "completed":
+        # Skip completed or in_progress tasks
+        if task.status != "pending":
             continue
 
-        # Skip if already claimed by someone else (but allow in_progress unclaimed - stuck tasks)
-        if task.status == "pending" and task.claimed_by:
+        # Skip if already claimed
+        if task.claimed_by:
             continue
 
         # Check if all dependencies are completed
@@ -147,12 +144,12 @@ def find_pending_task(scraps: ScrapsClient) -> tuple[str, str] | None:
                 deps_met = False
                 break
 
-        if not deps_met:
-            continue  # Skip this task, try next one
+        if deps_met:
+            available.append((filepath, content))
 
-        return filepath, content
-
-    return None
+    # Shuffle to distribute workers across tasks
+    random.shuffle(available)
+    return available
 
 
 def claim_task(scraps: ScrapsClient, task_path: str, task_content: str) -> tuple[bool, list[str]]:
@@ -448,10 +445,10 @@ def main():
                 print(f"\nCompleted {tasks_completed} tasks, exiting")
                 break
 
-            # Find a pending task (with deps satisfied)
-            result = find_pending_task(scraps)
+            # Get all available tasks (shuffled for load distribution)
+            available = find_available_tasks(scraps)
 
-            if result is None:
+            if not available:
                 elapsed = time.time() - start_time
 
                 # Check what's blocking us
@@ -474,16 +471,7 @@ def main():
                     break
 
                 # Show what we're waiting for
-                waiting_on = []
-                for t in pending:
-                    if t.depends_on:
-                        unmet = [d for d in t.depends_on if not any(c.get_task_number() == d for c in completed)]
-                        if unmet:
-                            waiting_on.append(f"{t.get_task_number()} (waiting for {unmet})")
-
-                if waiting_on:
-                    print(f"Waiting for dependencies: {waiting_on[:2]}... ({int(elapsed)}s)")
-                elif in_progress:
+                if in_progress:
                     print(f"Waiting for {len(in_progress)} in-progress task(s)... ({int(elapsed)}s)")
                 else:
                     print(f"Waiting for tasks... ({int(elapsed)}s)")
@@ -491,27 +479,30 @@ def main():
                 time.sleep(POLL_INTERVAL)
                 continue
 
-            # Reset timer when we find work
-            start_time = time.time()
+            # Try to claim one of the available tasks
+            claimed_task = None
+            for task_path, task_content in available:
+                task = parse_task_file(task_path, task_content)
 
-            consecutive_empty = 0
-            task_path, task_content = result
-            task = parse_task_file(task_path, task_content)
+                print(f"\nTrying: {task_path}")
+                print(f"  Title: {task.title}")
 
-            print(f"\nFound task: {task_path}")
-            print(f"  Title: {task.title}")
-            print(f"  Depends on: {task.depends_on or '(none)'}")
-            print(f"  Owns: {task.owns or '(none)'}")
+                success, claimed_patterns = claim_task(scraps, task_path, task_content)
+                if success:
+                    print(f"  Claimed!")
+                    claimed_task = (task_path, task_content, claimed_patterns)
+                    break
+                else:
+                    print(f"  Already taken, trying next...")
 
-            # Try to claim it (and its owned files)
-            print(f"  Claiming...")
-            success, claimed_patterns = claim_task(scraps, task_path, task_content)
-            if not success:
-                print(f"  Failed to claim (another agent got it or file conflict)")
-                time.sleep(1)  # Brief pause before trying again
+            if not claimed_task:
+                # All tasks were claimed by others, wait and retry
+                time.sleep(0.5)
                 continue
 
-            print(f"  Claimed {len(claimed_patterns)} patterns!")
+            # Reset timer when we get work
+            start_time = time.time()
+            task_path, task_content, claimed_patterns = claimed_task
 
             # Implement the task
             if implement_task(scraps, task_path, task_content, claimed_patterns):
@@ -519,7 +510,6 @@ def main():
                 print(f"\nTask completed! ({tasks_completed} total)")
             else:
                 print(f"\nTask implementation failed - resetting task to pending")
-                # Reset task back to pending so another worker can try
                 task = parse_task_file(task_path, task_content)
                 task.status = "pending"
                 task.claimed_by = None
@@ -527,7 +517,6 @@ def main():
                     scraps.commit(f"Reset failed task: {task.title}", {task_path: task.to_markdown()})
                 except Exception:
                     pass
-                # Release all claimed patterns on failure
                 scraps.release(claimed_patterns)
 
     except KeyboardInterrupt:
