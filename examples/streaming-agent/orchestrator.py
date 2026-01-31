@@ -196,11 +196,11 @@ DEPENDENCIES:
 - A task won't start until all its dependencies are completed
 - This ensures files are created before other tasks need to read them
 
-Example task breakdown for an API:
-- 001-project-setup: owns [requirements.txt, src/__init__.py, src/config.py]
-- 002-database-models: owns [src/models.py, src/database.py], depends_on: [001]
-- 003-auth-system: owns [src/auth.py, src/middleware.py], depends_on: [001, 002]
-- 004-api-routes: owns [src/routes.py, src/app.py], depends_on: [001, 002, 003]
+Example task breakdown for a TypeScript API:
+- 001-project-setup: owns [package.json, tsconfig.json, src/index.ts]
+- 002-types: owns [src/types.ts], depends_on: [001]
+- 003-storage: owns [src/store.ts], depends_on: [001, 002]
+- 004-routes: owns [src/routes.ts], depends_on: [001, 002, 003]
 
 Task priorities:
 - 1: Critical/blocking (setup tasks)

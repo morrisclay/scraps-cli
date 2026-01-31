@@ -56,13 +56,13 @@ POLL_INTERVAL = 3.0  # seconds between polling for tasks
 TOOLS = [
     {
         "name": "write_file",
-        "description": "Write content to a file in the src/ directory.",
+        "description": "Write content to a file. Use for src/ files, package.json, tsconfig.json, etc.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "File path (e.g., 'src/auth.py')",
+                    "description": "File path (e.g., 'src/routes.ts', 'package.json')",
                 },
                 "content": {
                     "type": "string",

@@ -202,10 +202,20 @@ run_workers() {
     echo -e "${GREEN}All workers finished!${NC}"
 }
 
+run_reviewer() {
+    echo ""
+    echo -e "${BLUE}============================================================${NC}"
+    echo -e "${BLUE}Phase 3: Reviewer - Checking completed work${NC}"
+    echo -e "${BLUE}============================================================${NC}"
+    echo ""
+
+    AGENT_ID="reviewer" python3 "$SCRIPT_DIR/reviewer.py" "$STORE" "$REPO"
+}
+
 run_documenter() {
     echo ""
     echo -e "${BLUE}============================================================${NC}"
-    echo -e "${BLUE}Phase 3: Documenter - Creating documentation${NC}"
+    echo -e "${BLUE}Phase 4: Documenter - Creating documentation${NC}"
     echo -e "${BLUE}============================================================${NC}"
     echo ""
 
@@ -312,6 +322,7 @@ main() {
     # Run the phases
     run_orchestrator
     run_workers "$WORKER_COUNT"
+    run_reviewer
     run_documenter
 
     echo ""
