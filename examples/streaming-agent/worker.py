@@ -131,10 +131,12 @@ def find_pending_task(scraps: ScrapsClient) -> tuple[str, str] | None:
 
         task = parse_task_file(filepath, content)
 
-        # Skip if not pending or already claimed
-        if task.status != "pending":
+        # Skip completed tasks
+        if task.status == "completed":
             continue
-        if task.claimed_by:
+
+        # Skip if already claimed by someone else (but allow in_progress unclaimed - stuck tasks)
+        if task.status == "pending" and task.claimed_by:
             continue
 
         # Check if all dependencies are completed
@@ -223,26 +225,24 @@ def implement_task(scraps: ScrapsClient, task_path: str, task_content: str,
             print(f"  Found existing: {filepath}")
 
     # Set up Claude agent
-    system_prompt = """You are a coding agent implementing a specific task from a multi-agent project.
+    system_prompt = """You are a coding agent. You MUST use the tools provided.
 
-IMPORTANT COORDINATION RULES:
-1. You own specific files listed in the task - only write to those files
-2. Other files may exist from previous tasks - READ them to understand the codebase
-3. Import from and build upon existing code - don't duplicate functionality
-4. If you need functionality from another file, import it
+CRITICAL: DO NOT output code as text. ALWAYS use the write_file tool.
 
-Your job is to:
-1. Read existing files to understand what's already built
-2. Understand the task requirements and acceptance criteria
-3. Write clean code that integrates with existing code
-4. Only write to files you own (listed in the task)
-5. Call done when the implementation is complete
+Your tools:
+- write_file(path, content) - Write a file. YOU MUST USE THIS.
+- read_file(path) - Read a file
+- done(commit_message) - Finish the task. YOU MUST CALL THIS WHEN DONE.
 
-Guidelines:
-- Import from existing modules instead of rewriting
-- Follow the patterns established in existing code
-- Keep your files focused on your task's responsibility
-- Write simple, readable code with brief comments"""
+Process:
+1. Read existing files if any exist (using read_file)
+2. Write your code using write_file (REQUIRED - do not just output code)
+3. Call done with a commit message (REQUIRED)
+
+WRONG: Outputting code as markdown text
+RIGHT: Calling write_file("src/types.ts", "export interface Task {...}")
+
+You own specific files - only write to those. Import from existing files."""
 
     agent = ClaudeAgent(system_prompt, TOOLS)
 
@@ -518,7 +518,15 @@ def main():
                 tasks_completed += 1
                 print(f"\nTask completed! ({tasks_completed} total)")
             else:
-                print(f"\nTask implementation failed")
+                print(f"\nTask implementation failed - resetting task to pending")
+                # Reset task back to pending so another worker can try
+                task = parse_task_file(task_path, task_content)
+                task.status = "pending"
+                task.claimed_by = None
+                try:
+                    scraps.commit(f"Reset failed task: {task.title}", {task_path: task.to_markdown()})
+                except Exception:
+                    pass
                 # Release all claimed patterns on failure
                 scraps.release(claimed_patterns)
 
