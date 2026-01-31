@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -90,36 +91,42 @@ func runWatch(client *api.Client, store, repo, branch, path string) error {
 	fmt.Println("Press Ctrl+C to stop")
 	fmt.Println()
 
-	// Connect to live stream
 	opts := &api.StreamOptions{Branch: branch, Path: path}
 	streamURL := client.BuildStreamURL(store, repo, opts)
-	streamClient := stream.NewClient(streamURL, client.APIKey())
 
-	streamClient.OnMessage = func(data []byte) {
-		var msg map[string]any
-		if json.Unmarshal(data, &msg) == nil {
-			printEvent(msg)
-		} else {
-			fmt.Println(string(data))
+	// Auto-reconnect loop
+	for {
+		streamClient := stream.NewClient(streamURL, client.APIKey())
+
+		streamClient.OnMessage = func(data []byte) {
+			var msg map[string]any
+			if json.Unmarshal(data, &msg) == nil {
+				printEvent(msg)
+			} else {
+				fmt.Println(string(data))
+			}
 		}
-	}
 
-	streamClient.OnError = func(err error) {
-		errorf("Stream error: %v", err)
-	}
+		streamClient.OnError = func(err error) {
+			// Don't print EOF errors, just reconnect silently
+			if err.Error() != "EOF" {
+				errorf("Stream error: %v", err)
+			}
+		}
 
-	streamClient.OnClose = func() {
-		info("Connection closed")
-	}
+		if err := streamClient.Connect(); err != nil {
+			errorf("Connection failed: %v, retrying...", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
 
-	if err := streamClient.Connect(); err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
-	}
-	defer streamClient.Close()
+		// Wait for connection to close
+		<-streamClient.Done()
+		streamClient.Close()
 
-	// Wait for connection to close
-	<-streamClient.Done()
-	return nil
+		// Reconnect after a brief pause
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func printEvent(event map[string]any) {
