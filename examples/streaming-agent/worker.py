@@ -123,18 +123,21 @@ def find_available_tasks(scraps: ScrapsClient) -> list[tuple[str, str]]:
                 all_tasks[task_num] = task
                 task_contents[filepath] = content
 
-    # Find all tasks that are available (pending, unclaimed, deps met)
+    # Find all tasks that are available (pending OR orphaned in_progress)
     available = []
     for filepath, content in task_contents.items():
         task = parse_task_file(filepath, content)
 
-        # Skip completed or in_progress tasks
-        if task.status != "pending":
+        # Skip completed tasks
+        if task.status == "completed":
             continue
 
-        # Skip if already claimed
-        if task.claimed_by:
+        # For pending tasks, skip if already claimed
+        if task.status == "pending" and task.claimed_by:
             continue
+
+        # For in_progress tasks, include them - they might be orphaned
+        # (original worker died). The claim attempt will fail if still held.
 
         # Check if all dependencies are completed
         deps_met = True
