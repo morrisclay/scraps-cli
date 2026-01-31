@@ -78,7 +78,9 @@ TOOLS = [
                 "owns": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "File paths this task owns exclusively (e.g., 'src/auth.py', 'src/models/user.py'). Workers will claim these files.",
+                    "description": "EXACTLY ONE file path this task owns (e.g., ['src/types.ts']). One file per task for atomic execution.",
+                    "maxItems": 1,
+                    "minItems": 1,
                 },
                 "priority": {
                     "type": "integer",
@@ -169,48 +171,54 @@ def main():
     pending_files["prd.md"] = prd_content
 
     # Set up Claude agent
-    system_prompt = """You are an orchestrator agent that breaks down a Product Requirements Document (PRD) into discrete, implementable tasks for a multi-agent swarm.
+    system_prompt = """You are an orchestrator agent that breaks down a PRD into ATOMIC tasks for a multi-agent swarm.
+
+ATOMIC TASKS ARE KEY:
+- Each task should own exactly ONE file
+- More tasks = more parallelism = faster completion
+- Create 6-10 small tasks, not 3-4 big ones
 
 Your job is to:
 1. Analyze the PRD carefully
-2. Break it down into 4-6 well-defined tasks
-3. IMPORTANT: Assign specific file ownership to each task to prevent conflicts
-4. Set up dependencies so tasks execute in the right order
-5. Create a task file for each using the create_task tool
-6. Call done when finished
+2. Break it into ATOMIC tasks (one file per task)
+3. Set up dependencies to maximize parallel execution
+4. Create tasks using create_task tool
+5. Call done when finished
 
-FILE OWNERSHIP IS CRITICAL:
-- Each task MUST specify which files it owns in the 'owns' field
-- Files should NOT overlap between tasks - each file belongs to exactly one task
-- Use specific file paths like 'src/models/user.py', not directories
-- If a shared file is needed (like models.py), assign it to the FIRST task that needs it
-- Later tasks that need that file should depend on the task that owns it
+FILE OWNERSHIP:
+- Each task owns EXACTLY ONE file
+- Use specific paths: 'package.json', 'src/types.ts', etc.
 
-TASK STRUCTURE:
-- Task 001 should be "Project Setup" - owns config files only (package.json, tsconfig.json)
-- Create PARALLEL tasks where possible - not everything needs to be sequential
-- Each task should own 1-3 files maximum for faster completion
+DEPENDENCIES FOR PARALLELISM:
+- Only add dependency if task READS from another task's file
+- Tasks with same deps run IN PARALLEL on different workers
+- Minimize dependency chains - maximize parallel branches
 
-DEPENDENCIES - IMPORTANT FOR PARALLELISM:
-- Use task numbers in depends_on (e.g., ["001", "002"])
-- ONLY add a dependency if the task truly needs files from another task
-- Tasks with the same dependencies can run IN PARALLEL
-- A task won't start until all its dependencies are completed
+EXAMPLE for a TypeScript API (8 atomic tasks):
 
-Example task breakdown for PARALLEL execution:
-- 001-project-setup: owns [package.json, tsconfig.json] - NO deps, runs first
-- 002-types: owns [src/types.ts], depends_on: [001]
-- 003-store: owns [src/store.ts], depends_on: [001] - PARALLEL with 002!
-- 004-routes: owns [src/routes.ts, src/index.ts], depends_on: [002, 003] - waits for both
+Phase 1 (parallel - no deps):
+- 001-package: owns [package.json]
+- 002-tsconfig: owns [tsconfig.json]
 
-This allows 002 and 003 to run simultaneously on different workers!
+Phase 2 (parallel - both depend on 001):
+- 003-types: owns [src/types.ts], depends_on: [001]
+- 004-store: owns [src/store.ts], depends_on: [001]
+
+Phase 3 (parallel - depend on types):
+- 005-handlers: owns [src/handlers.ts], depends_on: [003, 004]
+- 006-validation: owns [src/validation.ts], depends_on: [003]
+
+Phase 4 (final assembly):
+- 007-routes: owns [src/routes.ts], depends_on: [003, 005]
+- 008-index: owns [src/index.ts], depends_on: [007]
+
+This creates a wide dependency graph where 4+ workers stay busy!
 
 Task priorities:
-- 1: Critical/blocking (setup tasks)
-- 2: High priority (core functionality)
-- 3: Normal (features)
-- 4: Low priority
-- 5: Nice to have"""
+- 1: Setup/config files
+- 2: Core types/interfaces
+- 3: Implementation
+- 4: Assembly/integration"""
 
     agent = ClaudeAgent(system_prompt, TOOLS)
 
