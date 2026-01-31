@@ -104,9 +104,22 @@ TOOLS = [
 
 
 def find_pending_task(scraps: ScrapsClient) -> tuple[str, str] | None:
-    """Find a pending task that can be claimed. Returns (path, content) or None."""
+    """Find a pending task that can be claimed and has dependencies met. Returns (path, content) or None."""
     files = scraps.list_files("tasks")
 
+    # First, get all tasks to check dependency status
+    all_tasks = {}
+    for filepath in sorted(files):
+        if not filepath.endswith(".md"):
+            continue
+        content = scraps.read_file(filepath)
+        if content:
+            task = parse_task_file(filepath, content)
+            task_num = task.get_task_number()
+            if task_num:
+                all_tasks[task_num] = task
+
+    # Find a task that is pending, unclaimed, and has all dependencies completed
     for filepath in sorted(files):
         if not filepath.endswith(".md"):
             continue
@@ -123,19 +136,35 @@ def find_pending_task(scraps: ScrapsClient) -> tuple[str, str] | None:
         if task.claimed_by:
             continue
 
+        # Check if all dependencies are completed
+        deps_met = True
+        for dep_num in task.depends_on:
+            dep_task = all_tasks.get(dep_num)
+            if not dep_task or dep_task.status != "completed":
+                deps_met = False
+                break
+
+        if not deps_met:
+            continue  # Skip this task, try next one
+
         return filepath, content
 
     return None
 
 
-def claim_task(scraps: ScrapsClient, task_path: str, task_content: str) -> bool:
-    """Try to claim a task. Returns True if successful."""
-    # Try to claim the file pattern
-    if not scraps.claim([task_path], f"Implementing task: {task_path}"):
-        return False
+def claim_task(scraps: ScrapsClient, task_path: str, task_content: str) -> tuple[bool, list[str]]:
+    """Try to claim a task and its owned files. Returns (success, claimed_patterns)."""
+    task = parse_task_file(task_path, task_content)
+
+    # Build list of patterns to claim: task file + owned files
+    patterns_to_claim = [task_path] + task.owns
+    print(f"    Claiming: {patterns_to_claim}")
+
+    # Try to claim all patterns
+    if not scraps.claim(patterns_to_claim, f"Implementing task: {task.title}"):
+        return False, []
 
     # Update task status to in_progress
-    task = parse_task_file(task_path, task_content)
     task.status = "in_progress"
     task.claimed_by = scraps.agent_id
 
@@ -146,15 +175,16 @@ def claim_task(scraps: ScrapsClient, task_path: str, task_content: str) -> bool:
             f"Claim task: {task.title}",
             {task_path: updated_content}
         )
-        return True
+        return True, patterns_to_claim
     except Exception as e:
         print(f"  Failed to commit claim: {e}")
-        scraps.release([task_path])
-        return False
+        scraps.release(patterns_to_claim)
+        return False, []
 
 
 def complete_task(scraps: ScrapsClient, task_path: str, task_content: str,
-                  pending_files: dict[str, str], commit_message: str) -> str:
+                  pending_files: dict[str, str], commit_message: str,
+                  claimed_patterns: list[str]) -> str:
     """Mark task as complete and commit all files. Returns commit SHA."""
     task = parse_task_file(task_path, task_content)
     task.status = "completed"
@@ -165,41 +195,59 @@ def complete_task(scraps: ScrapsClient, task_path: str, task_content: str,
     # Commit everything
     sha = scraps.commit(commit_message, pending_files)
 
-    # Release the claim
-    scraps.release([task_path])
+    # Release all claimed patterns (task + owned files)
+    scraps.release(claimed_patterns)
 
     return sha
 
 
-def implement_task(scraps: ScrapsClient, task_path: str, task_content: str) -> bool:
+def implement_task(scraps: ScrapsClient, task_path: str, task_content: str,
+                   claimed_patterns: list[str]) -> bool:
     """Use Claude to implement a task. Returns True if successful."""
     task = parse_task_file(task_path, task_content)
     pending_files: dict[str, str] = {}
     debouncer = StreamDebouncer()
 
     print(f"\nImplementing: {task.title}")
+    print(f"  Owned files: {task.owns}")
     print("-" * 40)
 
+    # Read existing files for context (files created by dependencies)
+    existing_files = {}
+    all_src_files = scraps.list_files("src")
+    for filepath in all_src_files:
+        content = scraps.read_file(filepath)
+        if content:
+            existing_files[filepath] = content
+            print(f"  Found existing: {filepath}")
+
     # Set up Claude agent
-    system_prompt = """You are a coding agent implementing a specific task from a project.
+    system_prompt = """You are a coding agent implementing a specific task from a multi-agent project.
+
+IMPORTANT COORDINATION RULES:
+1. You own specific files listed in the task - only write to those files
+2. Other files may exist from previous tasks - READ them to understand the codebase
+3. Import from and build upon existing code - don't duplicate functionality
+4. If you need functionality from another file, import it
 
 Your job is to:
-1. Understand the task requirements and acceptance criteria
-2. Write clean, working code to implement the task
-3. Create all necessary files in the src/ directory
-4. Call done when the implementation is complete
+1. Read existing files to understand what's already built
+2. Understand the task requirements and acceptance criteria
+3. Write clean code that integrates with existing code
+4. Only write to files you own (listed in the task)
+5. Call done when the implementation is complete
 
 Guidelines:
-- Write simple, readable code
-- Include necessary imports
-- Add brief comments for clarity
-- Focus on the acceptance criteria
-- Keep files small and focused"""
+- Import from existing modules instead of rewriting
+- Follow the patterns established in existing code
+- Keep your files focused on your task's responsibility
+- Write simple, readable code with brief comments"""
 
     agent = ClaudeAgent(system_prompt, TOOLS)
 
     try:
-        return _implement_task_loop(agent, scraps, task, task_path, task_content, pending_files, debouncer)
+        return _implement_task_loop(agent, scraps, task, task_path, task_content,
+                                    pending_files, debouncer, claimed_patterns, existing_files)
     except openai.BadRequestError as e:
         check_api_error(e)
     except openai.APIError as e:
@@ -207,13 +255,34 @@ Guidelines:
     return False
 
 
-def _implement_task_loop(agent, scraps, task, task_path, task_content, pending_files, debouncer):
+def _implement_task_loop(agent, scraps, task, task_path, task_content, pending_files,
+                         debouncer, claimed_patterns, existing_files):
     """Inner loop for task implementation."""
+
+    # Build context from existing files
+    existing_context = ""
+    if existing_files:
+        existing_context = "\n\n## Existing Code (from previous tasks)\n"
+        existing_context += "Read these to understand what's already built. Import from them as needed.\n\n"
+        for path, content in existing_files.items():
+            existing_context += f"### {path}\n```python\n{content}\n```\n\n"
+
+    # Build owned files list
+    owned_files_str = "\n".join(f"- {f}" for f in task.owns) if task.owns else "- (none specified)"
+
     prompt = f"""Please implement this task:
 
 {task.body}
 
-Create the necessary source files and call done when finished."""
+## Files You Own (only write to these)
+{owned_files_str}
+
+{existing_context}
+
+IMPORTANT:
+- Only write to files listed in "Files You Own"
+- Read and import from existing files as needed
+- Call done when finished"""
 
     while True:
         # Stream the response
@@ -312,7 +381,8 @@ Create the necessary source files and call done when finished."""
                 commit_msg = args.get("commit_message", "Implementation complete")
                 print(f"\n  Committing: {commit_msg}")
 
-                sha = complete_task(scraps, task_path, task_content, pending_files, commit_msg)
+                sha = complete_task(scraps, task_path, task_content, pending_files,
+                                    commit_msg, claimed_patterns)
                 print(f"  Committed: {sha[:8]}")
 
                 tool_results.append({
@@ -396,24 +466,27 @@ def main():
 
             print(f"\nFound task: {task_path}")
             print(f"  Title: {task.title}")
+            print(f"  Depends on: {task.depends_on or '(none)'}")
+            print(f"  Owns: {task.owns or '(none)'}")
 
-            # Try to claim it
+            # Try to claim it (and its owned files)
             print(f"  Claiming...")
-            if not claim_task(scraps, task_path, task_content):
-                print(f"  Failed to claim (another agent got it?)")
+            success, claimed_patterns = claim_task(scraps, task_path, task_content)
+            if not success:
+                print(f"  Failed to claim (another agent got it or file conflict)")
                 time.sleep(1)  # Brief pause before trying again
                 continue
 
-            print(f"  Claimed!")
+            print(f"  Claimed {len(claimed_patterns)} patterns!")
 
             # Implement the task
-            if implement_task(scraps, task_path, task_content):
+            if implement_task(scraps, task_path, task_content, claimed_patterns):
                 tasks_completed += 1
                 print(f"\nTask completed! ({tasks_completed} total)")
             else:
                 print(f"\nTask implementation failed")
-                # Release the claim on failure
-                scraps.release([task_path])
+                # Release all claimed patterns on failure
+                scraps.release(claimed_patterns)
 
     except KeyboardInterrupt:
         print("\nInterrupted")

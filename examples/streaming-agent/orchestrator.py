@@ -75,6 +75,11 @@ TOOLS = [
                     "items": {"type": "string"},
                     "description": "List of acceptance criteria",
                 },
+                "owns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "File paths this task owns exclusively (e.g., 'src/auth.py', 'src/models/user.py'). Workers will claim these files.",
+                },
                 "priority": {
                     "type": "integer",
                     "description": "Priority 1-5 (1 is highest)",
@@ -83,11 +88,11 @@ TOOLS = [
                 "depends_on": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "List of task slugs this depends on",
+                    "description": "List of task numbers this depends on (e.g., ['001', '002']). Task won't start until dependencies complete.",
                     "default": [],
                 },
             },
-            "required": ["task_number", "slug", "title", "description", "acceptance_criteria"],
+            "required": ["task_number", "slug", "title", "description", "acceptance_criteria", "owns"],
         },
     },
     {
@@ -112,19 +117,26 @@ def create_task_content(inputs: dict) -> str:
     priority = inputs.get("priority", 3)
     depends = inputs.get("depends_on", [])
     depends_str = ", ".join(depends) if depends else ""
+    owns = inputs.get("owns", [])
+    owns_str = ", ".join(owns) if owns else ""
 
     criteria_lines = "\n".join(f"- [ ] {c}" for c in inputs["acceptance_criteria"])
+    owns_lines = "\n".join(f"- `{f}`" for f in owns) if owns else "- (none specified)"
 
     return f"""---
 status: pending
 claimed_by: null
 priority: {priority}
 depends_on: [{depends_str}]
+owns: [{owns_str}]
 ---
 # Task: {inputs['title']}
 
 ## Description
 {inputs['description']}
+
+## Owned Files
+{owns_lines}
 
 ## Acceptance Criteria
 {criteria_lines}
@@ -157,24 +169,43 @@ def main():
     pending_files["prd.md"] = prd_content
 
     # Set up Claude agent
-    system_prompt = """You are an orchestrator agent that breaks down a Product Requirements Document (PRD) into discrete, implementable tasks.
+    system_prompt = """You are an orchestrator agent that breaks down a Product Requirements Document (PRD) into discrete, implementable tasks for a multi-agent swarm.
 
 Your job is to:
 1. Analyze the PRD carefully
-2. Break it down into 3-6 well-defined tasks
-3. Create a task file for each using the create_task tool
-4. Consider dependencies between tasks
-5. Call done when finished
+2. Break it down into 4-6 well-defined tasks
+3. IMPORTANT: Assign specific file ownership to each task to prevent conflicts
+4. Set up dependencies so tasks execute in the right order
+5. Create a task file for each using the create_task tool
+6. Call done when finished
 
-Each task should be:
-- Self-contained and implementable by a single agent
-- Clearly defined with specific acceptance criteria
-- Ordered by dependencies (later tasks can depend on earlier ones)
+FILE OWNERSHIP IS CRITICAL:
+- Each task MUST specify which files it owns in the 'owns' field
+- Files should NOT overlap between tasks - each file belongs to exactly one task
+- Use specific file paths like 'src/models/user.py', not directories
+- If a shared file is needed (like models.py), assign it to the FIRST task that needs it
+- Later tasks that need that file should depend on the task that owns it
+
+TASK STRUCTURE:
+- Task 001 should be "Project Setup" - owns config files, requirements.txt, __init__.py files
+- Later tasks build on the foundation and depend on earlier tasks
+- Each task should own 2-5 files maximum
+
+DEPENDENCIES:
+- Use task numbers in depends_on (e.g., ["001", "002"])
+- A task won't start until all its dependencies are completed
+- This ensures files are created before other tasks need to read them
+
+Example task breakdown for an API:
+- 001-project-setup: owns [requirements.txt, src/__init__.py, src/config.py]
+- 002-database-models: owns [src/models.py, src/database.py], depends_on: [001]
+- 003-auth-system: owns [src/auth.py, src/middleware.py], depends_on: [001, 002]
+- 004-api-routes: owns [src/routes.py, src/app.py], depends_on: [001, 002, 003]
 
 Task priorities:
-- 1: Critical/blocking
-- 2: High priority
-- 3: Normal
+- 1: Critical/blocking (setup tasks)
+- 2: High priority (core functionality)
+- 3: Normal (features)
 - 4: Low priority
 - 5: Nice to have"""
 

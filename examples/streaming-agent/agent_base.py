@@ -68,7 +68,8 @@ class TaskFile:
     status: str  # pending, in_progress, completed
     claimed_by: Optional[str]
     priority: int
-    depends_on: list[str]
+    depends_on: list[str]  # Task numbers this depends on (e.g., ["001", "002"])
+    owns: list[str]  # File patterns this task owns (e.g., ["src/auth/*.py"])
     title: str
     body: str
     raw_content: str
@@ -76,16 +77,26 @@ class TaskFile:
     def to_markdown(self) -> str:
         """Convert back to markdown with YAML frontmatter."""
         depends = ", ".join(self.depends_on) if self.depends_on else ""
+        owns = ", ".join(self.owns) if self.owns else ""
         lines = [
             "---",
             f"status: {self.status}",
             f"claimed_by: {self.claimed_by or 'null'}",
             f"priority: {self.priority}",
             f"depends_on: [{depends}]",
+            f"owns: [{owns}]",
             "---",
             self.body,
         ]
         return "\n".join(lines)
+
+    def get_task_number(self) -> str:
+        """Extract task number from path (e.g., 'tasks/001-setup.md' -> '001')."""
+        import os
+        filename = os.path.basename(self.path)
+        if "-" in filename:
+            return filename.split("-")[0]
+        return ""
 
 
 def parse_task_file(path: str, content: str) -> TaskFile:
@@ -134,6 +145,7 @@ def parse_task_file(path: str, content: str) -> TaskFile:
         claimed_by=frontmatter.get("claimed_by"),
         priority=frontmatter.get("priority", 3),
         depends_on=frontmatter.get("depends_on", []),
+        owns=frontmatter.get("owns", []),
         title=title,
         body=body,
         raw_content=content,
@@ -296,6 +308,51 @@ class ScrapsClient:
         except httpx.RequestError:
             pass
         return [], None
+
+    def get_all_tasks(self) -> list["TaskFile"]:
+        """Get all task files from the repo."""
+        tasks = []
+        files = self.list_files("tasks")
+        for filepath in sorted(files):
+            if not filepath.endswith(".md"):
+                continue
+            content = self.read_file(filepath)
+            if content:
+                tasks.append(parse_task_file(filepath, content))
+        return tasks
+
+    def get_task_by_number(self, task_number: str) -> Optional["TaskFile"]:
+        """Get a specific task by its number (e.g., '001')."""
+        files = self.list_files("tasks")
+        for filepath in files:
+            if filepath.startswith(f"tasks/{task_number}-"):
+                content = self.read_file(filepath)
+                if content:
+                    return parse_task_file(filepath, content)
+        return None
+
+    def wait_for_dependencies(self, task: "TaskFile", poll_interval: float = 3.0, max_wait: float = 300.0) -> bool:
+        """Wait for all dependencies of a task to be completed. Returns True if all completed."""
+        if not task.depends_on:
+            return True
+
+        start_time = time.time()
+        while time.time() - start_time < max_wait:
+            all_completed = True
+            for dep_num in task.depends_on:
+                dep_task = self.get_task_by_number(dep_num)
+                if not dep_task or dep_task.status != "completed":
+                    all_completed = False
+                    print(f"    Waiting for task {dep_num} to complete...")
+                    break
+
+            if all_completed:
+                return True
+
+            time.sleep(poll_interval)
+
+        print(f"    Timeout waiting for dependencies: {task.depends_on}")
+        return False
 
 
 # ---------------------------------------------------------------------------
