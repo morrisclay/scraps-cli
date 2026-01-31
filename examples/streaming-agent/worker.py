@@ -506,21 +506,34 @@ def main():
             # Reset timer when we get work
             start_time = time.time()
             task_path, task_content, claimed_patterns = claimed_task
+            task = parse_task_file(task_path, task_content)
 
-            # Implement the task
-            if implement_task(scraps, task_path, task_content, claimed_patterns):
-                tasks_completed += 1
-                print(f"\nTask completed! ({tasks_completed} total)")
-            else:
-                print(f"\nTask implementation failed - resetting task to pending")
-                task = parse_task_file(task_path, task_content)
-                task.status = "pending"
-                task.claimed_by = None
-                try:
-                    scraps.commit(f"Reset failed task: {task.title}", {task_path: task.to_markdown()})
-                except Exception:
-                    pass
-                scraps.release(claimed_patterns)
+            # Start heartbeat to keep claim alive during implementation
+            heartbeat = scraps.start_heartbeat(
+                claimed_patterns,
+                f"Implementing: {task.title}",
+                ttl_seconds=60,
+                interval=30
+            )
+
+            try:
+                # Implement the task
+                if implement_task(scraps, task_path, task_content, claimed_patterns):
+                    tasks_completed += 1
+                    print(f"\nTask completed! ({tasks_completed} total)")
+                else:
+                    print(f"\nTask implementation failed - resetting task to pending")
+                    task = parse_task_file(task_path, task_content)
+                    task.status = "pending"
+                    task.claimed_by = None
+                    try:
+                        scraps.commit(f"Reset failed task: {task.title}", {task_path: task.to_markdown()})
+                    except Exception:
+                        pass
+                    scraps.release(claimed_patterns)
+            finally:
+                # Always stop heartbeat when done
+                heartbeat.stop()
 
     except KeyboardInterrupt:
         print("\nInterrupted")

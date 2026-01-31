@@ -17,8 +17,9 @@ import random
 import re
 import subprocess
 import platform
+import threading
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable
 from openai import OpenAI
 import httpx
 
@@ -204,8 +205,8 @@ class ScrapsClient:
         except httpx.RequestError as e:
             print(f"  [stream] Error sending {event_type}: {e}")
 
-    def claim(self, patterns: list[str], reason: str, ttl_seconds: int = 90) -> bool:
-        """Claim exclusive access to files. Claims expire after ttl_seconds (default 90s)."""
+    def claim(self, patterns: list[str], reason: str, ttl_seconds: int = 60) -> bool:
+        """Claim exclusive access to files. Claims expire after ttl_seconds (default 60s)."""
         try:
             r = self.http.post(
                 f"/stores/{self.store}/repos/{self.repo}/branches/{self.branch}/coordinate/claim",
@@ -222,6 +223,23 @@ class ScrapsClient:
         except httpx.RequestError:
             pass
         return False
+
+    def start_heartbeat(self, patterns: list[str], reason: str,
+                        ttl_seconds: int = 60, interval: int = 30) -> "ClaimHeartbeat":
+        """Start a background heartbeat that renews claims periodically.
+
+        Args:
+            patterns: File patterns to keep claimed
+            reason: Claim reason/description
+            ttl_seconds: TTL for each claim renewal (default 60s)
+            interval: Seconds between renewals (default 30s)
+
+        Returns:
+            ClaimHeartbeat object - call .stop() when done
+        """
+        heartbeat = ClaimHeartbeat(self, patterns, reason, ttl_seconds, interval)
+        heartbeat.start()
+        return heartbeat
 
     def release(self, patterns: list[str]):
         """Release file claims."""
@@ -359,6 +377,58 @@ class ScrapsClient:
 
         print(f"    Timeout waiting for dependencies: {task.depends_on}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Claim Heartbeat (keeps claims alive during long operations)
+# ---------------------------------------------------------------------------
+
+class ClaimHeartbeat:
+    """Background thread that periodically renews claims to prevent expiration."""
+
+    def __init__(self, client: "ScrapsClient", patterns: list[str], reason: str,
+                 ttl_seconds: int = 60, interval: int = 30):
+        self.client = client
+        self.patterns = patterns
+        self.reason = reason
+        self.ttl_seconds = ttl_seconds
+        self.interval = interval
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._renewal_count = 0
+        self._failed = False
+
+    def start(self):
+        """Start the heartbeat thread."""
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        """Stop the heartbeat thread."""
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=2.0)
+
+    def is_failed(self) -> bool:
+        """Check if the heartbeat failed (claim was lost)."""
+        return self._failed
+
+    def _run(self):
+        """Background renewal loop."""
+        while not self._stop_event.wait(self.interval):
+            try:
+                success = self.client.claim(self.patterns, self.reason, self.ttl_seconds)
+                if success:
+                    self._renewal_count += 1
+                else:
+                    # Claim failed - someone else took it or server error
+                    self._failed = True
+                    print(f"  [heartbeat] Claim renewal failed!")
+                    break
+            except Exception as e:
+                print(f"  [heartbeat] Error renewing claim: {e}")
+                self._failed = True
+                break
 
 
 # ---------------------------------------------------------------------------
