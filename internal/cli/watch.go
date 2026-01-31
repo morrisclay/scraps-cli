@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
@@ -140,6 +141,8 @@ type watchModel struct {
 	viewport     viewport.Model
 	ready        bool
 	filter       string
+	filterInput  textinput.Model
+	filtering    bool
 	showClaims   bool
 	width        int
 	height       int
@@ -159,15 +162,21 @@ type streamErrorMsg struct{ err error }
 type streamClosedMsg struct{}
 
 func newWatchModel(client *api.Client, store, repo, branch, path string, claims bool) watchModel {
+	ti := textinput.New()
+	ti.Placeholder = "type to filter..."
+	ti.CharLimit = 50
+	ti.Width = 30
+
 	return watchModel{
-		client:     client,
-		store:      store,
-		repo:       repo,
-		branch:     branch,
-		path:       path,
-		claims:     claims,
-		events:     make([]watchEvent, 0),
-		showClaims: true,
+		client:      client,
+		store:       store,
+		repo:        repo,
+		branch:      branch,
+		path:        path,
+		claims:      claims,
+		events:      make([]watchEvent, 0),
+		showClaims:  true,
+		filterInput: ti,
 	}
 }
 
@@ -251,6 +260,29 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewport()
 
 	case tea.KeyMsg:
+		// Handle filter input mode
+		if m.filtering {
+			switch {
+			case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
+				m.filtering = false
+				m.filterInput.Blur()
+				return m, nil
+			case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+				m.filter = m.filterInput.Value()
+				m.filtering = false
+				m.filterInput.Blur()
+				m.updateViewport()
+				return m, nil
+			default:
+				var cmd tea.Cmd
+				m.filterInput, cmd = m.filterInput.Update(msg)
+				// Live filter as user types
+				m.filter = m.filterInput.Value()
+				m.updateViewport()
+				return m, cmd
+			}
+		}
+
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "ctrl+c"))):
 			if m.streamClient != nil {
@@ -261,7 +293,16 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.showClaims = !m.showClaims
 			m.updateViewport()
 		case key.Matches(msg, key.NewBinding(key.WithKeys("/"))):
-			// TODO: implement filtering
+			m.filtering = true
+			m.filterInput.Focus()
+			return m, textinput.Blink
+		case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
+			// Clear filter when not in filter mode
+			if m.filter != "" {
+				m.filter = ""
+				m.filterInput.SetValue("")
+				m.updateViewport()
+			}
 		}
 
 	case streamConnectedMsg:
@@ -392,11 +433,21 @@ func (m *watchModel) updateViewport() {
 		return
 	}
 
+	filterLower := strings.ToLower(m.filter)
+
 	var lines []string
 	for _, e := range m.events {
 		// Filter claims if disabled
 		if !m.showClaims && (e.Type == "CLAIM" || e.Type == "RELEASE") {
 			continue
+		}
+
+		// Apply text filter
+		if m.filter != "" {
+			matchText := strings.ToLower(e.Type + " " + e.Summary + " " + e.Details)
+			if !strings.Contains(matchText, filterLower) {
+				continue
+			}
 		}
 
 		timeStr := tui.MutedStyle.Render(e.Time.Format("15:04:05"))
@@ -460,14 +511,30 @@ func (m watchModel) View() string {
 
 	// Footer
 	s.WriteString("\n")
-	helpText := "q quit"
-	if m.showClaims {
-		helpText += "  c hide claims"
+
+	if m.filtering {
+		// Show filter input
+		s.WriteString(tui.LabelStyle.Render("Filter: "))
+		s.WriteString(m.filterInput.View())
+		s.WriteString("  ")
+		s.WriteString(tui.MutedStyle.Render("enter confirm • esc cancel"))
 	} else {
-		helpText += "  c show claims"
+		// Build help items
+		var helpItems []string
+		helpItems = append(helpItems, "q quit")
+		if m.showClaims {
+			helpItems = append(helpItems, "c hide claims")
+		} else {
+			helpItems = append(helpItems, "c show claims")
+		}
+		if m.filter != "" {
+			helpItems = append(helpItems, fmt.Sprintf("/ filter:%s", m.filter))
+			helpItems = append(helpItems, "esc clear")
+		} else {
+			helpItems = append(helpItems, "/ filter")
+		}
+		s.WriteString(tui.HelpStyle.Render(strings.Join(helpItems, " • ")))
 	}
-	helpText += "  / filter"
-	s.WriteString(tui.HelpStyle.Render(helpText))
 
 	return s.String()
 }
