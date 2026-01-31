@@ -83,6 +83,32 @@ Examples:
 }
 
 func runWatchNonInteractive(client *api.Client, store, repo, branch, path string) error {
+	info(fmt.Sprintf("Watching %s/%s", store, repo))
+	if branch != "" {
+		fmt.Printf("Branch: %s\n", branch)
+	}
+	if path != "" {
+		fmt.Printf("Path: %s\n", path)
+	}
+
+	// Fetch and display recent historical events
+	events, err := client.GetRecentStreamEvents(store, repo, 20)
+	if err != nil {
+		errorf("Failed to fetch historical events: %v", err)
+	} else if len(events) > 0 {
+		fmt.Printf("\n--- Recent events (%d) ---\n", len(events))
+		for i := len(events) - 1; i >= 0; i-- {
+			formatted, _ := json.MarshalIndent(events[i], "", "  ")
+			fmt.Println(string(formatted))
+		}
+		fmt.Println("--- Live events ---")
+	} else {
+		fmt.Println("(no recent events)")
+	}
+
+	fmt.Println("Press Ctrl+C to stop")
+	fmt.Println()
+
 	opts := &api.StreamOptions{Branch: branch, Path: path}
 	streamURL := client.BuildStreamURL(store, repo, opts)
 	streamClient := stream.NewClient(streamURL, client.APIKey())
@@ -110,16 +136,6 @@ func runWatchNonInteractive(client *api.Client, store, repo, branch, path string
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 	defer streamClient.Close()
-
-	info(fmt.Sprintf("Watching %s/%s", store, repo))
-	if branch != "" {
-		fmt.Printf("Branch: %s\n", branch)
-	}
-	if path != "" {
-		fmt.Printf("Path: %s\n", path)
-	}
-	fmt.Println("Press Ctrl+C to stop")
-	fmt.Println()
 
 	// Wait for connection to close
 	<-streamClient.Done()
@@ -180,8 +196,24 @@ func newWatchModel(client *api.Client, store, repo, branch, path string, claims 
 	}
 }
 
+type historicalEventsMsg struct {
+	events []map[string]interface{}
+}
+
 func (m watchModel) Init() tea.Cmd {
-	return m.connect()
+	return tea.Batch(m.fetchHistorical(), m.connect())
+}
+
+func (m *watchModel) fetchHistorical() tea.Cmd {
+	return func() tea.Msg {
+		// Fetch last 50 events
+		events, err := m.client.GetRecentStreamEvents(m.store, m.repo, 50)
+		if err != nil {
+			// Ignore errors - historical is optional
+			return nil
+		}
+		return historicalEventsMsg{events: events}
+	}
 }
 
 func (m *watchModel) connect() tea.Cmd {
@@ -308,6 +340,15 @@ func (m watchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case streamConnectedMsg:
 		m.connected = true
 		return m, m.waitForMessage()
+
+	case historicalEventsMsg:
+		// Process historical events (in reverse order since newest first)
+		for i := len(msg.events) - 1; i >= 0; i-- {
+			data, _ := json.Marshal(msg.events[i])
+			m.processMessage(data)
+		}
+		m.updateViewport()
+		return m, nil
 
 	case streamMessageMsg:
 		m.processMessage(msg.data)

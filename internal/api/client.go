@@ -706,3 +706,48 @@ func (c *Client) BuildStreamURL(store, repo string, opts *StreamOptions) string 
 	}
 	return baseURL
 }
+
+// StreamEvent represents an event from the stream.
+type StreamEvent struct {
+	Type      string                 `json:"type"`
+	AgentID   string                 `json:"agent_id,omitempty"`
+	Timestamp string                 `json:"timestamp,omitempty"`
+	Data      map[string]interface{} `json:"-"` // Catch-all for other fields
+}
+
+// StreamEventsResponse is the response from the stream events endpoint.
+type StreamEventsResponse struct {
+	Events []map[string]interface{} `json:"events"`
+}
+
+// GetRecentStreamEvents fetches recent events from the stream (non-live).
+func (c *Client) GetRecentStreamEvents(store, repo string, limit int) ([]map[string]interface{}, error) {
+	// Build URL manually to avoid JoinPath mangling the query string
+	fullURL := fmt.Sprintf("%s/api/v1/stores/%s/repos/%s/streams/events?limit=%d",
+		c.host, url.PathEscape(store), url.PathEscape(repo), limit)
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var response StreamEventsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	return response.Events, nil
+}
