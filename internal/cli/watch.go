@@ -163,6 +163,10 @@ type watchModel struct {
 	width        int
 	height       int
 	err          error
+	// Channels for stream messages (created once, reused)
+	msgChan   chan []byte
+	errChan   chan error
+	closeChan chan struct{}
 }
 
 type watchEvent struct {
@@ -193,6 +197,9 @@ func newWatchModel(client *api.Client, store, repo, branch, path string, claims 
 		events:      make([]watchEvent, 0),
 		showClaims:  true,
 		filterInput: ti,
+		msgChan:     make(chan []byte, 100),
+		errChan:     make(chan error, 1),
+		closeChan:   make(chan struct{}, 1),
 	}
 }
 
@@ -222,6 +229,27 @@ func (m *watchModel) connect() tea.Cmd {
 		streamURL := m.client.BuildStreamURL(m.store, m.repo, opts)
 		m.streamClient = stream.NewClient(streamURL, m.client.APIKey())
 
+		// Set up callbacks BEFORE connecting to avoid race conditions
+		m.streamClient.OnMessage = func(data []byte) {
+			select {
+			case m.msgChan <- data:
+			default:
+				// Drop message if channel full (shouldn't happen with buffer of 100)
+			}
+		}
+		m.streamClient.OnError = func(err error) {
+			select {
+			case m.errChan <- err:
+			default:
+			}
+		}
+		m.streamClient.OnClose = func() {
+			select {
+			case m.closeChan <- struct{}{}:
+			default:
+			}
+		}
+
 		if err := m.streamClient.Connect(); err != nil {
 			return streamErrorMsg{err: err}
 		}
@@ -235,36 +263,14 @@ func (m watchModel) waitForMessage() tea.Cmd {
 		return nil
 	}
 
-	msgChan := make(chan []byte, 1)
-	errChan := make(chan error, 1)
-	closeChan := make(chan struct{}, 1)
-
-	m.streamClient.OnMessage = func(data []byte) {
-		select {
-		case msgChan <- data:
-		default:
-		}
-	}
-	m.streamClient.OnError = func(err error) {
-		select {
-		case errChan <- err:
-		default:
-		}
-	}
-	m.streamClient.OnClose = func() {
-		select {
-		case closeChan <- struct{}{}:
-		default:
-		}
-	}
-
+	// Use the shared channels that were set up before connecting
 	return func() tea.Msg {
 		select {
-		case data := <-msgChan:
+		case data := <-m.msgChan:
 			return streamMessageMsg{data: data}
-		case err := <-errChan:
+		case err := <-m.errChan:
 			return streamErrorMsg{err: err}
-		case <-closeChan:
+		case <-m.closeChan:
 			return streamClosedMsg{}
 		}
 	}
